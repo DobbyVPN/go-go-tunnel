@@ -1,17 +1,4 @@
-# dobby_bridge/CMakeLists.txt
-cmake_minimum_required(VERSION 3.16)
-project(DobbyBridge)
-
-# 1. Bring in the unmodified TrustTunnel build system
-add_subdirectory(../vendor/TrustTunnelClient/platform/windows trusttunnel_build)
-
-# 2. Define your custom shared library
+# We are injected into AdGuard's tree, so we have direct access to vpn_easy_a!
 add_library(dobby_bridge SHARED dobby_bridge.cpp)
-
-# 3. Link AdGuard's core static libraries to your bridge
-target_link_libraries(dobby_bridge PRIVATE
-    vpnlibs_trusttunnel
-    vpnlibs_core
-    vpnlibs_net
-    vpnlibs_common
-)
+target_link_libraries(dobby_bridge PRIVATE vpn_easy_a)
+set_target_properties(dobby_bridge PROPERTIES OUTPUT_NAME "dobby_bridge")
