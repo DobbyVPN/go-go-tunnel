@@ -1,0 +1,149 @@
+name: Build Dobby Bridge
+
+env:
+  CONAN_VER: 2.12
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'go_client/trusttunnel/dobby_bridge/**'
+
+jobs:
+  Linux:
+    runs-on: ubuntu-22.04
+    env:
+      LLVM_MAJOR_VER: 21
+    steps:
+      - name: Checkout Code with Submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive # CRITICAL: Fetches the TrustTunnel vendor code
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install LLVM and Dependencies
+        run: |
+          sudo apt install -y ninja-build
+          pip install conan~=$CONAN_VER
+          curl -O https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh $LLVM_MAJOR_VER
+          sudo apt install -y libc++-${LLVM_MAJOR_VER}-dev libclang-rt-${LLVM_MAJOR_VER}-dev libc++abi-${LLVM_MAJOR_VER}-dev
+          echo "/usr/lib/llvm-$LLVM_MAJOR_VER/bin" >> $GITHUB_PATH
+
+      - name: Bootstrap Conan
+        working-directory: vendor/TrustTunnelClient
+        run: python ./scripts/bootstrap_conan_deps.py
+
+      - name: Configure and Build Bridge
+        working-directory: go_client/trusttunnel/dobby_bridge
+        run: |
+          mkdir build && cd build
+          cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_C_COMPILER="clang" \
+            -DCMAKE_CXX_COMPILER="clang++" \
+            -DCMAKE_CXX_FLAGS="-stdlib=libc++ -Wno-gnu-zero-variadic-macro-arguments" \
+            -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+            -G "Ninja" ..
+          cmake --build . --target dobby_bridge
+
+      - name: Upload Linux Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dobby_bridge-linux
+          path: go_client/trusttunnel/dobby_bridge/build/libdobby_bridge.so
+
+# -------------------------------------------------------------
+
+  MacOS:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout Code with Submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install LLVM and Dependencies
+        run: |
+          brew install ninja llvm@21
+          sed -i '' 's/_LIBCPP_INTRODUCED_IN_LLVM_21 1/_LIBCPP_INTRODUCED_IN_LLVM_21 0/g' "$(brew --prefix llvm@21)/include/c++/v1/__configuration/availability.h"
+          pip install conan~=$CONAN_VER
+          echo "/opt/homebrew/opt/llvm@21/bin" >> $GITHUB_PATH
+
+      - name: Bootstrap Conan
+        working-directory: vendor/TrustTunnelClient
+        run: python ./scripts/bootstrap_conan_deps.py
+
+      - name: Configure and Build Bridge
+        working-directory: go_client/trusttunnel/dobby_bridge
+        run: |
+          mkdir build && cd build
+          cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_C_COMPILER="clang" \
+            -DCMAKE_CXX_COMPILER="clang++" \
+            -DCMAKE_CXX_FLAGS="-stdlib=libc++ -Wno-gnu-zero-variadic-macro-arguments" \
+            -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+            -G "Ninja" ..
+          cmake --build . --target dobby_bridge
+
+      - name: Upload MacOS Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dobby_bridge-macos
+          path: go_client/trusttunnel/dobby_bridge/build/libdobby_bridge.dylib
+
+# -------------------------------------------------------------
+
+  Windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Code with Submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Set up MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Install Dependencies
+        run: |
+          choco install strawberryperl nasm
+          pip install conan~=${{ env.CONAN_VER }} ninja
+
+      - name: Bootstrap Conan
+        working-directory: vendor/TrustTunnelClient
+        run: python ./scripts/bootstrap_conan_deps.py
+
+      - name: Configure and Build Bridge
+        working-directory: go_client/trusttunnel/dobby_bridge
+        run: |
+          mkdir build && cd build
+          cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo `
+            -DCMAKE_C_COMPILER="cl.exe" `
+            -DCMAKE_CXX_COMPILER="cl.exe" `
+            -G "Ninja" ..
+          cmake --build . --target dobby_bridge
+
+      - name: Upload Windows Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dobby_bridge-windows
+          path: |
+            go_client\trusttunnel\dobby_bridge\build\dobby_bridge.dll
+            go_client\trusttunnel\dobby_bridge\build\dobby_bridge.lib
