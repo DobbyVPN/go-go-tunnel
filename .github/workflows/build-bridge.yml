@@ -36,11 +36,11 @@ jobs:
           echo "/usr/lib/llvm-$LLVM_MAJOR_VER/bin" >> $GITHUB_PATH
 
       - name: Bootstrap Conan
-        working-directory: vendor/TrustTunnelClient
+        working-directory: trusttunnel/vendor/TrustTunnelClient
         run: python ./scripts/bootstrap_conan_deps.py
 
       - name: Configure and Build Bridge
-        working-directory: go_client/trusttunnel/dobby_bridge
+        working-directory: trusttunnel/dobby_bridge
         run: |
           mkdir build && cd build
           cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo \
@@ -80,11 +80,11 @@ jobs:
           echo "/opt/homebrew/opt/llvm@21/bin" >> $GITHUB_PATH
 
       - name: Bootstrap Conan
-        working-directory: vendor/TrustTunnelClient
+        working-directory: trusttunnel/vendor/TrustTunnelClient
         run: python ./scripts/bootstrap_conan_deps.py
 
       - name: Configure and Build Bridge
-        working-directory: go_client/trusttunnel/dobby_bridge
+        working-directory: trusttunnel/dobby_bridge
         run: |
           mkdir build && cd build
           cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo \
@@ -127,11 +127,11 @@ jobs:
           pip install conan~=${{ env.CONAN_VER }} ninja
 
       - name: Bootstrap Conan
-        working-directory: vendor/TrustTunnelClient
+        working-directory: trusttunnel/vendor/TrustTunnelClient
         run: python ./scripts/bootstrap_conan_deps.py
 
       - name: Configure and Build Bridge
-        working-directory: go_client/trusttunnel/dobby_bridge
+        working-directory: trusttunnel/dobby_bridge
         run: |
           mkdir build && cd build
           cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo `
