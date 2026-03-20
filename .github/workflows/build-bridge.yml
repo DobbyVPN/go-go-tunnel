@@ -44,8 +44,8 @@ jobs:
         shell: bash
         run: |
           # 1. Dynamically patch their CMake file to suppress the macro warning
-          sed -i 's/-Wno-c99-extensions -Wno-zero-length-array -Wno-gnu-zero-variadic-macro-arguments/g' CMakeLists.txt
-          
+          sed -i 's/-Wall -Wextra -Wpedantic/-Wno-gnu-zero-variadic-macro-arguments/g' CMakeLists.txt
+
           # 2. Inject our bridge into their tree
           echo 'add_subdirectory("../../../../dobby_bridge" "dobby_bridge_build")' >> CMakeLists.txt
           
@@ -95,8 +95,8 @@ jobs:
         shell: bash
         run: |
           # 1. Dynamically patch their CMake file (MacOS BSD sed syntax)
-          sed -i '' 's/-Wno-c99-extensions -Wno-zero-length-array -Wno-gnu-zero-variadic-macro-arguments/g' CMakeLists.txt
-          
+          sed -i '' 's/-Wall -Wextra -Wpedantic/-Wno-gnu-zero-variadic-macro-arguments/g' CMakeLists.txt
+
           # 2. Inject our bridge into their tree
           echo 'add_subdirectory("../../../../dobby_bridge" "dobby_bridge_build")' >> CMakeLists.txt
           
@@ -154,9 +154,9 @@ jobs:
         run: |
           echo 'add_subdirectory("../../../../dobby_bridge" "dobby_bridge_build")' >> CMakeLists.txt
           mkdir build && cd build
-          cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo `
-            -DCMAKE_C_COMPILER="cl.exe" `
-            -DCMAKE_CXX_COMPILER="cl.exe" `
+          cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_C_COMPILER="cl.exe" \
+            -DCMAKE_CXX_COMPILER="cl.exe" \
             -G "Ninja" ..
           cmake --build . --target dobby_bridge
 
