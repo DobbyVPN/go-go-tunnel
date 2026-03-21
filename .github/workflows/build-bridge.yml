@@ -113,7 +113,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: dobby_bridge-macos
-          path: go_client/trusttunnel/dobby_bridge/build/libdobby_bridge.dylib
+          path: trusttunnel/vendor/TrustTunnelClient/platform/windows/build/dobby_bridge_build/libdobby_bridge.dylib
 
 # -------------------------------------------------------------
 
@@ -150,13 +150,13 @@ jobs:
 
       - name: Configure and Build Bridge
         working-directory: trusttunnel/vendor/TrustTunnelClient/platform/windows
-        shell: bash
         run: |
-          echo 'add_subdirectory("../../../../dobby_bridge" "dobby_bridge_build")' >> CMakeLists.txt
-          mkdir build && cd build
-          cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-            -DCMAKE_C_COMPILER="cl.exe" \
-            -DCMAKE_CXX_COMPILER="cl.exe" \
+          Add-Content -Path CMakeLists.txt -Value 'add_subdirectory("../../../../dobby_bridge" "dobby_bridge_build")'
+          mkdir build
+          cd build
+          cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo `
+            -DCMAKE_C_COMPILER="cl.exe" `
+            -DCMAKE_CXX_COMPILER="cl.exe" `
             -G "Ninja" ..
           cmake --build . --target dobby_bridge
 
@@ -165,5 +165,5 @@ jobs:
         with:
           name: dobby_bridge-windows
           path: |
-            go_client\trusttunnel\dobby_bridge\build\dobby_bridge.dll
-            go_client\trusttunnel\dobby_bridge\build\dobby_bridge.lib
+            trusttunnel\vendor\TrustTunnelClient\platform\windows\build\dobby_bridge_build\dobby_bridge.dll
+            trusttunnel\vendor\TrustTunnelClient\platform\windows\build\dobby_bridge_build\dobby_bridge.lib
