@@ -1,20 +1,20 @@
 package trusttunnel
 
 /*
-#cgo CFLAGS: -I${SRCDIR}/include
+#cgo CFLAGS: -I${SRCDIR}/dobby_bridge
 
 // --- OS-Specific Linking ---
-// Windows expects a file named vpn_easy.lib in the same directory
-#cgo windows LDFLAGS: -L${SRCDIR} -lvpn_easy
+// Windows expects a file named dobby_bridge.dll and dobby_bridge.lib in the same directory
+#cgo windows LDFLAGS: -L${SRCDIR}/lib/windows -ldobby_bridge
 
-// Linux expects a file named libvpn_easy.a or libvpn_easy.so
-#cgo linux LDFLAGS: -L${SRCDIR} -lvpn_easy -lpthread -ldl -lc++ -lc++abi -lm
+// Linux expects a file named dobby_bridge.so
+#cgo linux LDFLAGS: -L${SRCDIR}/lib/linux -ldobby_bridge -lpthread -ldl -lc++ -lc++abi -lm
 
-// macOS expects a file named libvpn_easy.a or libvpn_easy.dylib
-#cgo darwin LDFLAGS: -L${SRCDIR} -lvpn_easy -framework CoreFoundation -framework Security
+// macOS expects a file named dobby_bridge.dylib
+#cgo darwin LDFLAGS: -L${SRCDIR}/lib/macos -ldobby_bridge -framework CoreFoundation -framework Security
 
 #include <stdlib.h>
-#include "vpn_easy.h"
+#include "dobby_bridge/dobby_bridge.h"
 
 extern void c_state_changed(void* arg, int state);
 extern void c_log_message(int level, const char* msg);
@@ -58,17 +58,17 @@ func NewTrustTunnelManager() *TrustTunnelManager {
 // Start launches the VPN with the given TOML configuration.
 func (m *TrustTunnelManager) Start(tomlConfig string) error {
 	// Hook the logger BEFORE starting the engine
-	C.vpn_easy_set_log_callback((C.on_log_message_t)(C.c_log_message))
+	C.dobby_vpn_set_log_callback((C.dobby_on_log_message_t)(C.c_log_message))
 
 	cConfig := C.CString(tomlConfig)
 	defer C.free(unsafe.Pointer(cConfig))
 
 	// Pass the TOML string, the bridged C callback, and a nil pointer for the argument
-	C.vpn_easy_start(cConfig, (C.on_state_changed_t)(C.c_state_changed), nil)
+	C.dobby_vpn_start(cConfig, (C.dobby_on_state_changed_t)(C.c_state_changed), nil)
 	return nil
 }
 
 // Stop halts the VPN and frees resources.
 func (m *TrustTunnelManager) Stop() {
-	C.vpn_easy_stop()
+	C.dobby_vpn_stop()
 }

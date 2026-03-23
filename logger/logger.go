@@ -145,6 +145,7 @@ func SetPath(path string) error {
 }
 
 func Debugf(format string, args ...any) {
+	fmt.Printf("Debug: "+format+"\n", args...)
 	if lg.logger == nil {
 		return
 	}
@@ -152,7 +153,7 @@ func Debugf(format string, args ...any) {
 }
 
 func Infof(format string, args ...any) {
-	fmt.Printf("From logger! "+format+"\n", args...)
+	fmt.Printf("Info: "+format+"\n", args...)
 	if lg.logger == nil {
 		return
 	}
@@ -160,6 +161,7 @@ func Infof(format string, args ...any) {
 }
 
 func Warnf(format string, args ...any) {
+	fmt.Printf("Warn: "+format+"\n", args...)
 	if lg.logger == nil {
 		return
 	}
@@ -167,6 +169,7 @@ func Warnf(format string, args ...any) {
 }
 
 func Errorf(format string, args ...any) {
+	fmt.Printf("Error: "+format+"\n", args...)
 	if lg.logger == nil {
 		return
 	}
