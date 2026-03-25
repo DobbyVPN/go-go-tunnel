@@ -15,12 +15,12 @@ func main() {
 	// 1. Define the TOML configuration.
 	// Replace the [endpoint] details with your actual server credentials.
 	tomlConfig := `
-loglevel = "trace"
+loglevel = "info"
 vpn_mode = "general"
 killswitch_enabled = false
 
 [endpoint]
-hostname = "46.224.179.231"
+hostname = "static.231.179.224.46.clients.your-server.de"
 addresses = ["46.224.179.231:443"]
 has_ipv6 = true
 username = "dobby"
@@ -28,10 +28,10 @@ password = "dobby_password"
 client_random_prefix = ""
 skip_verification = true
 upstream_protocol = "http2"
-anti_dpi = false
+anti_dpi = true
 
 [listener.socks]
-address = "127.0.0.1:10809"
+address = "127.0.0.1:10808"
 `
 
 	// 2. Initialize and start the manager

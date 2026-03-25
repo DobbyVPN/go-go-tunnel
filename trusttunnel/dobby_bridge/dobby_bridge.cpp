@@ -94,7 +94,8 @@ void dobby_vpn_start(const char *toml_config, dobby_on_state_changed_t state_cha
             };
         } else {
             callbacks.protect_handler = [](ag::SocketProtectEvent *event) {
-                event->result = (g_protect_callback && g_protect_callback(event->fd)) ? 0 : -1;
+                // If Go provides a callback, use it. Otherwise, default to 0 (Allow).
+                event->result = g_protect_callback ? g_protect_callback(event->fd) : 0;
             };
         }
         callbacks.verify_handler = [](ag::VpnVerifyCertificateEvent *event) {
@@ -102,7 +103,8 @@ void dobby_vpn_start(const char *toml_config, dobby_on_state_changed_t state_cha
         };
 #else
         callbacks.protect_handler = [](ag::SocketProtectEvent *event) {
-            event->result = (g_protect_callback && g_protect_callback(event->fd)) ? 0 : -1;
+            // If Go provides a callback, use it. Otherwise, default to 0 (Allow).
+            event->result = g_protect_callback ? g_protect_callback(event->fd) : 0;
         };
 #endif
 
