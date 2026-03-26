@@ -1,0 +1,119 @@
+name: Build Dobby Bridge (Mobile)
+
+env:
+  CONAN_VER: 2.12
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'go_client/trusttunnel/dobby_bridge/**'
+
+jobs:
+  Android-ARM64:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout Code with Submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install Dependencies
+        run: |
+          sudo apt install -y ninja-build
+          pip install conan~=$CONAN_VER
+
+      - name: Bootstrap Conan
+        working-directory: trusttunnel/vendor/TrustTunnelClient
+        run: python ./scripts/bootstrap_conan_deps.py
+
+      - name: Configure and Build Bridge (Android)
+        working-directory: trusttunnel/vendor/TrustTunnelClient/platform/windows
+        shell: bash
+        run: |
+          # 1. Inject warning suppressions
+          echo "add_compile_options(-Wno-gnu-zero-variadic-macro-arguments -Wno-zero-length-array -Wno-c99-extensions)" > ${GITHUB_WORKSPACE}/inject_flags.cmake
+          
+          # 2. Convert our bridge from a SHARED library to a STATIC library for gomobile
+          sed -i 's/SHARED/STATIC/g' ../../../../dobby_bridge/CMakeLists.txt
+          
+          # 3. Inject into their tree
+          echo 'add_subdirectory("../../../../dobby_bridge" "dobby_bridge_build")' >> CMakeLists.txt
+          
+          mkdir build && cd build
+          
+          # 4. Compile using the Android NDK Toolchain
+          cmake -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_LATEST_HOME/build/cmake/android.toolchain.cmake \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-24 \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_PROJECT_INCLUDE="${GITHUB_WORKSPACE}/inject_flags.cmake" \
+            -G "Ninja" ..
+            
+          cmake --build . --target dobby_bridge
+
+      - name: Upload Android Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dobby_bridge-android-arm64
+          path: trusttunnel/vendor/TrustTunnelClient/platform/windows/build/dobby_bridge_build/libdobby_bridge.a
+
+# -------------------------------------------------------------
+
+  iOS-ARM64:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout Code with Submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install Dependencies
+        run: |
+          brew install ninja
+          pip install conan~=$CONAN_VER
+
+      - name: Bootstrap Conan
+        working-directory: trusttunnel/vendor/TrustTunnelClient
+        run: python ./scripts/bootstrap_conan_deps.py
+
+      - name: Configure and Build Bridge (iOS)
+        working-directory: trusttunnel/vendor/TrustTunnelClient/platform/windows
+        shell: bash
+        run: |
+          # 1. Inject warning suppressions
+          echo "add_compile_options(-Wno-gnu-zero-variadic-macro-arguments -Wno-zero-length-array -Wno-c99-extensions)" > ${GITHUB_WORKSPACE}/inject_flags.cmake
+          
+          # 2. Convert our bridge from SHARED to STATIC (using macOS BSD sed syntax)
+          sed -i '' 's/SHARED/STATIC/g' ../../../../dobby_bridge/CMakeLists.txt
+          
+          # 3. Inject into their tree
+          echo 'add_subdirectory("../../../../dobby_bridge" "dobby_bridge_build")' >> CMakeLists.txt
+          
+          mkdir build && cd build
+          
+          # 4. Compile using the Apple iOS Toolchain
+          cmake -DCMAKE_SYSTEM_NAME=iOS \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0 \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_PROJECT_INCLUDE="${GITHUB_WORKSPACE}/inject_flags.cmake" \
+            -G "Ninja" ..
+            
+          cmake --build . --target dobby_bridge
+
+      - name: Upload iOS Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dobby_bridge-ios-arm64
+          path: trusttunnel/vendor/TrustTunnelClient/platform/windows/build/dobby_bridge_build/libdobby_bridge.a
