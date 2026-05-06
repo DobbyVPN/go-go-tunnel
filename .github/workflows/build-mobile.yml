@@ -32,18 +32,18 @@ jobs:
           pip install conan~=$CONAN_VER
 
       - name: Bootstrap Conan
-        working-directory: trusttunnel/vendor/TrustTunnelClient
+        working-directory: trusttunnel-go/TrustTunnelClient
         run: python ./scripts/bootstrap_conan_deps.py
 
       - name: Configure and Build Bridge (Android)
-        working-directory: trusttunnel/vendor/TrustTunnelClient/platform/windows
+        working-directory: trusttunnel-go/TrustTunnelClient/platform/windows
         shell: bash
         run: |
           # 1. Inject warning suppressions
           sed -i 's/-Wall -Wextra -Wpedantic/-Wno-gnu-zero-variadic-macro-arguments/g' CMakeLists.txt
           
           # 2. Inject into their tree
-          echo 'add_subdirectory("../../../../dobby_bridge" "dobby_bridge_build")' >> CMakeLists.txt
+          echo 'add_subdirectory("../../../dobby_bridge" "dobby_bridge_build")' >> CMakeLists.txt
           
           mkdir build && cd build
           
@@ -60,7 +60,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: dobby_bridge-android-arm64
-          path: trusttunnel/vendor/TrustTunnelClient/platform/windows/build/dobby_bridge_build/libdobby_bridge.so
+          path: trusttunnel-go/TrustTunnelClient/platform/windows/build/dobby_bridge_build/libdobby_bridge.so
 
 # -------------------------------------------------------------
 
@@ -87,21 +87,21 @@ jobs:
           rustup target add aarch64-apple-ios
 
       - name: Bootstrap Conan
-        working-directory: trusttunnel/vendor/TrustTunnelClient
+        working-directory: trusttunnel-go/TrustTunnelClient
         run: python ./scripts/bootstrap_conan_deps.py
 
       - name: Configure and Build Bridge (iOS)
-        working-directory: trusttunnel/vendor/TrustTunnelClient/platform/windows
+        working-directory: trusttunnel-go/TrustTunnelClient/platform/windows
         shell: bash
         run: |
           # 1. Inject warning suppressions
           sed -i '' 's/-Wall -Wextra -Wpedantic/-Wno-gnu-zero-variadic-macro-arguments/g' CMakeLists.txt
           
           # 2. Convert our bridge from SHARED to STATIC (using macOS BSD sed syntax)
-          sed -i '' 's/SHARED/STATIC/g' ../../../../dobby_bridge/CMakeLists.txt
+          sed -i '' 's/SHARED/STATIC/g' ../../../dobby_bridge/CMakeLists.txt
           
           # 3. Inject into their tree
-          echo 'add_subdirectory("../../../../dobby_bridge" "dobby_bridge_build")' >> CMakeLists.txt
+          echo 'add_subdirectory("../../../dobby_bridge" "dobby_bridge_build")' >> CMakeLists.txt
           
           mkdir build && cd build
           
@@ -118,4 +118,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: dobby_bridge-ios-arm64
-          path: trusttunnel/vendor/TrustTunnelClient/platform/windows/build/dobby_bridge_build/libdobby_bridge.a
+          path: trusttunnel-go/TrustTunnelClient/platform/windows/build/dobby_bridge_build/libdobby_bridge.a

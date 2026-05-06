@@ -1,3 +1,0 @@
-[submodule "trusttunnel/vendor/TrustTunnelClient"]
-	path = trusttunnel/vendor/TrustTunnelClient
-	url = git@github.com:TrustTunnel/TrustTunnelClient.git

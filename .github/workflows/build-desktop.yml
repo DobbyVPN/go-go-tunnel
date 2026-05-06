@@ -1,4 +1,4 @@
-name: Build Dobby Bridge
+name: Build Dobby Bridge (Desktop)
 
 env:
   CONAN_VER: 2.12
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - 'go_client/trusttunnel/dobby_bridge/**'
+      - 'trusttunnel-go/dobby_bridge/**'
 
 jobs:
   Linux:
@@ -18,7 +18,7 @@ jobs:
       - name: Checkout Code with Submodules
         uses: actions/checkout@v4
         with:
-          submodules: recursive # CRITICAL: Fetches the TrustTunnel vendor code
+          submodules: recursive # Fetches the TrustTunnel vendor code
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -36,18 +36,18 @@ jobs:
           echo "/usr/lib/llvm-$LLVM_MAJOR_VER/bin" >> $GITHUB_PATH
 
       - name: Bootstrap Conan
-        working-directory: trusttunnel/vendor/TrustTunnelClient
+        working-directory: trusttunnel-go/TrustTunnelClient
         run: python ./scripts/bootstrap_conan_deps.py
 
       - name: Configure and Build Bridge
-        working-directory: trusttunnel/vendor/TrustTunnelClient/platform/windows
+        working-directory: trusttunnel-go/TrustTunnelClient/platform/windows
         shell: bash
         run: |
           # 1. Dynamically patch their CMake file to suppress the macro warning
           sed -i 's/-Wall -Wextra -Wpedantic/-Wno-gnu-zero-variadic-macro-arguments/g' CMakeLists.txt
 
           # 2. Inject our bridge into their tree
-          echo 'add_subdirectory("../../../../dobby_bridge" "dobby_bridge_build")' >> CMakeLists.txt
+          echo 'add_subdirectory("../../../dobby_bridge" "dobby_bridge_build")' >> CMakeLists.txt
           
           mkdir build && cd build
           cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo \
@@ -62,7 +62,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: dobby_bridge-linux
-          path: trusttunnel/vendor/TrustTunnelClient/platform/windows/build/dobby_bridge_build/libdobby_bridge.so
+          path: trusttunnel-go/TrustTunnelClient/platform/windows/build/dobby_bridge_build/libdobby_bridge.so
 
 # -------------------------------------------------------------
 
@@ -87,18 +87,18 @@ jobs:
           echo "/opt/homebrew/opt/llvm@21/bin" >> $GITHUB_PATH
 
       - name: Bootstrap Conan
-        working-directory: trusttunnel/vendor/TrustTunnelClient
+        working-directory: trusttunnel-go/TrustTunnelClient
         run: python ./scripts/bootstrap_conan_deps.py
 
       - name: Configure and Build Bridge
-        working-directory: trusttunnel/vendor/TrustTunnelClient/platform/windows
+        working-directory: trusttunnel-go/TrustTunnelClient/platform/windows
         shell: bash
         run: |
           # 1. Dynamically patch their CMake file (MacOS BSD sed syntax)
           sed -i '' 's/-Wall -Wextra -Wpedantic/-Wno-gnu-zero-variadic-macro-arguments/g' CMakeLists.txt
 
           # 2. Inject our bridge into their tree
-          echo 'add_subdirectory("../../../../dobby_bridge" "dobby_bridge_build")' >> CMakeLists.txt
+          echo 'add_subdirectory("../../../dobby_bridge" "dobby_bridge_build")' >> CMakeLists.txt
           
           mkdir build && cd build
           cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo \
@@ -113,7 +113,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: dobby_bridge-macos
-          path: trusttunnel/vendor/TrustTunnelClient/platform/windows/build/dobby_bridge_build/libdobby_bridge.dylib
+          path: trusttunnel-go/TrustTunnelClient/platform/windows/build/dobby_bridge_build/libdobby_bridge.dylib
 
 # -------------------------------------------------------------
 
@@ -145,13 +145,13 @@ jobs:
           pip install conan~=${{ env.CONAN_VER }} ninja
 
       - name: Bootstrap Conan
-        working-directory: trusttunnel/vendor/TrustTunnelClient
+        working-directory: trusttunnel-go/TrustTunnelClient
         run: python ./scripts/bootstrap_conan_deps.py
 
       - name: Configure and Build Bridge
-        working-directory: trusttunnel/vendor/TrustTunnelClient/platform/windows
+        working-directory: trusttunnel-go/TrustTunnelClient/platform/windows
         run: |
-          Add-Content -Path CMakeLists.txt -Value 'add_subdirectory("../../../../dobby_bridge" "dobby_bridge_build")'
+          Add-Content -Path CMakeLists.txt -Value 'add_subdirectory("../../../dobby_bridge" "dobby_bridge_build")'
           mkdir build
           cd build
           cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo `
@@ -165,5 +165,5 @@ jobs:
         with:
           name: dobby_bridge-windows
           path: |
-            trusttunnel\vendor\TrustTunnelClient\platform\windows\build\dobby_bridge_build\dobby_bridge.dll
-            trusttunnel\vendor\TrustTunnelClient\platform\windows\build\dobby_bridge_build\dobby_bridge.lib
+            trusttunnel-go\TrustTunnelClient\platform\windows\build\dobby_bridge_build\dobby_bridge.dll
+            trusttunnel-go\TrustTunnelClient\platform\windows\build\dobby_bridge_build\dobby_bridge.lib

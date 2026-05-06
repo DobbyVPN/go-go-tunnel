@@ -1,7 +1,7 @@
 //go:build android || ios
 // +build android ios
 
-package internal
+package main
 
 /*
 #cgo CFLAGS: -I${SRCDIR}/dobby_bridge

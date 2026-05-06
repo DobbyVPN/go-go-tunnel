@@ -5,6 +5,7 @@
 #include <thread>
 #include <optional>
 #include <variant>
+#include <future>
 
 #include <magic_enum/magic_enum.hpp>
 #include <toml++/toml.h>
@@ -69,7 +70,7 @@ void dobby_vpn_start(const char *toml_config, dobby_on_state_changed_t state_cha
     // 1. Start Event Loop immediately
     m_ev_loop.reset(ag::vpn_event_loop_create());
     m_executor_thread = std::thread([]() { ag::vpn_event_loop_run(m_ev_loop.get()); });
-    ag::vpn_event_loop_dispatch_sync(m_ev_loop.get(), nullptr, nullptr);
+    // ag::vpn_event_loop_dispatch_sync(m_ev_loop.get(), nullptr, nullptr);
 
     // 2. Capture the RAW string, which is safely copyable across threads
     std::string config_str(toml_config);
@@ -116,6 +117,7 @@ void dobby_vpn_start(const char *toml_config, dobby_on_state_changed_t state_cha
         // 4. Initialize the client safely
         m_vpn = new dobby_vpn_context();
         m_vpn->client = std::make_unique<ag::TrustTunnelClient>(std::move(*trusttunnel_config), std::move(callbacks));
+
         // m_vpn->network_monitor = std::make_unique<ag::AutoNetworkMonitor>(m_vpn->client.get());
         // m_vpn->network_monitor->start();
         m_vpn->client->connect(ag::TrustTunnelClient::AutoSetup{});
@@ -124,19 +126,38 @@ void dobby_vpn_start(const char *toml_config, dobby_on_state_changed_t state_cha
 }
 
 void dobby_vpn_stop() {
-    if (!m_vpn) return;
-    
-    ag::event_loop::submit(m_ev_loop.get(), []() {
-        if (m_vpn) {
-            m_vpn->client->disconnect();
-            m_vpn->network_monitor->stop();
-            delete m_vpn;
-            m_vpn = nullptr;
-        }
-    }).release();
+    infolog(g_logger, "Starting TrustTunnel vpn core stop.");
 
-    ag::vpn_event_loop_stop(m_ev_loop.get());
+    // Always stop the event loop if it exists, even if m_vpn is currently null
+    if (m_ev_loop) {
+        std::promise<void> stop_promise;
+        std::future<void> stop_future = stop_promise.get_future();
+
+        // Submit cleanup task
+        ag::event_loop::submit(m_ev_loop.get(), [&stop_promise]() {
+            if (m_vpn) {
+                // Let the destructor handle all the safe async teardown!
+                // Do NOT manually call disconnect() or network_monitor->stop()
+                delete m_vpn;
+                m_vpn = nullptr;
+            }
+            stop_promise.set_value(); 
+        }).release();
+
+        // Wait for cleanup task to finish safely
+        stop_future.wait();
+
+        // Stop the loop
+        ag::vpn_event_loop_stop(m_ev_loop.get());
+    }
+
+    // Always join the thread
     if (m_executor_thread.joinable()) {
         m_executor_thread.join();
     }
+
+    // Free the event loop memory so it is completely clean for the next start
+    m_ev_loop.reset();
+
+    infolog(g_logger, "End TrustTunnel vpn core stop.");
 }
