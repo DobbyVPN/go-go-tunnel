@@ -1,0 +1,3 @@
+[submodule "TrustTunnelClient"]
+	path = TrustTunnelClient
+	url = https://github.com/TrustTunnel/TrustTunnelClient.git

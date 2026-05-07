@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - 'trusttunnel-go/dobby_bridge/**'
+      - 'dobby_bridge/**'
 
 jobs:
   Linux:
@@ -36,11 +36,11 @@ jobs:
           echo "/usr/lib/llvm-$LLVM_MAJOR_VER/bin" >> $GITHUB_PATH
 
       - name: Bootstrap Conan
-        working-directory: trusttunnel-go/TrustTunnelClient
+        working-directory: TrustTunnelClient
         run: python ./scripts/bootstrap_conan_deps.py
 
       - name: Configure and Build Bridge
-        working-directory: trusttunnel-go/TrustTunnelClient/platform/windows
+        working-directory: TrustTunnelClient/platform/windows
         shell: bash
         run: |
           # 1. Dynamically patch their CMake file to suppress the macro warning
@@ -62,7 +62,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: dobby_bridge-linux
-          path: trusttunnel-go/TrustTunnelClient/platform/windows/build/dobby_bridge_build/libdobby_bridge.so
+          path: TrustTunnelClient/platform/windows/build/dobby_bridge_build/libdobby_bridge.so
 
 # -------------------------------------------------------------
 
@@ -87,11 +87,11 @@ jobs:
           echo "/opt/homebrew/opt/llvm@21/bin" >> $GITHUB_PATH
 
       - name: Bootstrap Conan
-        working-directory: trusttunnel-go/TrustTunnelClient
+        working-directory: TrustTunnelClient
         run: python ./scripts/bootstrap_conan_deps.py
 
       - name: Configure and Build Bridge
-        working-directory: trusttunnel-go/TrustTunnelClient/platform/windows
+        working-directory: TrustTunnelClient/platform/windows
         shell: bash
         run: |
           # 1. Dynamically patch their CMake file (MacOS BSD sed syntax)
@@ -113,7 +113,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: dobby_bridge-macos
-          path: trusttunnel-go/TrustTunnelClient/platform/windows/build/dobby_bridge_build/libdobby_bridge.dylib
+          path: TrustTunnelClient/platform/windows/build/dobby_bridge_build/libdobby_bridge.dylib
 
 # -------------------------------------------------------------
 
@@ -145,11 +145,11 @@ jobs:
           pip install conan~=${{ env.CONAN_VER }} ninja
 
       - name: Bootstrap Conan
-        working-directory: trusttunnel-go/TrustTunnelClient
+        working-directory: TrustTunnelClient
         run: python ./scripts/bootstrap_conan_deps.py
 
       - name: Configure and Build Bridge
-        working-directory: trusttunnel-go/TrustTunnelClient/platform/windows
+        working-directory: TrustTunnelClient/platform/windows
         run: |
           Add-Content -Path CMakeLists.txt -Value 'add_subdirectory("../../../dobby_bridge" "dobby_bridge_build")'
           mkdir build
@@ -165,5 +165,5 @@ jobs:
         with:
           name: dobby_bridge-windows
           path: |
-            trusttunnel-go\TrustTunnelClient\platform\windows\build\dobby_bridge_build\dobby_bridge.dll
-            trusttunnel-go\TrustTunnelClient\platform\windows\build\dobby_bridge_build\dobby_bridge.lib
+            TrustTunnelClient\platform\windows\build\dobby_bridge_build\dobby_bridge.dll
+            TrustTunnelClient\platform\windows\build\dobby_bridge_build\dobby_bridge.lib

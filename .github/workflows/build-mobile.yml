@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - 'go_client/trusttunnel/dobby_bridge/**'
+      - 'dobby_bridge/**'
 
 jobs:
   Android-ARM64:
@@ -32,11 +32,11 @@ jobs:
           pip install conan~=$CONAN_VER
 
       - name: Bootstrap Conan
-        working-directory: trusttunnel-go/TrustTunnelClient
+        working-directory: TrustTunnelClient
         run: python ./scripts/bootstrap_conan_deps.py
 
       - name: Configure and Build Bridge (Android)
-        working-directory: trusttunnel-go/TrustTunnelClient/platform/windows
+        working-directory: TrustTunnelClient/platform/windows
         shell: bash
         run: |
           # 1. Inject warning suppressions
@@ -60,7 +60,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: dobby_bridge-android-arm64
-          path: trusttunnel-go/TrustTunnelClient/platform/windows/build/dobby_bridge_build/libdobby_bridge.so
+          path: TrustTunnelClient/platform/windows/build/dobby_bridge_build/libdobby_bridge.so
 
 # -------------------------------------------------------------
 
@@ -87,11 +87,11 @@ jobs:
           rustup target add aarch64-apple-ios
 
       - name: Bootstrap Conan
-        working-directory: trusttunnel-go/TrustTunnelClient
+        working-directory: TrustTunnelClient
         run: python ./scripts/bootstrap_conan_deps.py
 
       - name: Configure and Build Bridge (iOS)
-        working-directory: trusttunnel-go/TrustTunnelClient/platform/windows
+        working-directory: TrustTunnelClient/platform/windows
         shell: bash
         run: |
           # 1. Inject warning suppressions
@@ -118,4 +118,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: dobby_bridge-ios-arm64
-          path: trusttunnel-go/TrustTunnelClient/platform/windows/build/dobby_bridge_build/libdobby_bridge.a
+          path: TrustTunnelClient/platform/windows/build/dobby_bridge_build/libdobby_bridge.a
