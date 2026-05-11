@@ -23,7 +23,7 @@ TrustTunnel Core Library (platform-agnostic)
 - **[`dobby_bridge_unix.cpp`](dobby_bridge/dobby_bridge_unix.cpp)** - Unix-specific implementation for Linux and macOS
 - **[`dobby_bridge_android.cpp`](dobby_bridge/dobby_bridge_android.cpp)** - Android-specific implementation using JNI
 - **[`dobby_bridge_ios.mm`](dobby_bridge/dobby_bridge_ios.mm)** - iOS-specific implementation using Objective-C++
-- **[`dobby_bridge.go`](dobby_bridge/dobby_bridge.go)** - Go wrapper using CGO
+- **[`trusttunnel_manager.go`](trusttunnel_manager.go)** - Unified Go wrapper using CGO for all platforms
 - **[`CMakeLists.txt`](dobby_bridge/CMakeLists.txt)** - Build configuration with conditional compilation
 
 ## Features

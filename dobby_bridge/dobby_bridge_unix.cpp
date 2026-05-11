@@ -42,20 +42,6 @@ static dobby_vpn_context* m_vpn = nullptr;
 static std::unique_ptr<ag::VpnEventLoop, decltype(&ag::vpn_event_loop_destroy)> m_ev_loop{nullptr, ag::vpn_event_loop_destroy};
 static std::thread m_executor_thread;
 
-// Unix-specific socket protection
-// This function can be overridden by the user via dobby_vpn_set_protect_callback
-static int vpn_unix_protect_socket(int fd) {
-    // If user provided a custom callback, use it
-    if (g_protect_callback) {
-        return g_protect_callback(fd);
-    }
-    
-    // Default Unix implementation: no protection needed for SOCKS mode
-    // For TUN mode, the user should provide their own implementation
-    // that binds the socket to the correct interface or uses routing rules
-    return 0; // Success
-}
-
 // Set log callback
 void dobby_vpn_set_log_callback(dobby_on_log_message_t cb) {
     g_log_callback = cb;

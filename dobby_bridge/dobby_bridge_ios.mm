@@ -91,8 +91,6 @@ static int vpn_ios_protect_socket(int fd, const struct sockaddr *peer) {
     char if_name[IF_NAMESIZE] = "not set";
     if_indextoname(g_outbound_interface, if_name);
     
-    int result = 0;
-    
     if (peer->sa_family == AF_INET) {
         // Set IP_BOUND_IF socket option
         if (setsockopt(fd, IPPROTO_IP, IP_BOUND_IF, &g_outbound_interface, sizeof(g_outbound_interface)) != 0) {
