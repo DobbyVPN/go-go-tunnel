@@ -60,7 +60,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: dobby_bridge-android-arm64
-          path: TrustTunnelClient/build/libdobby_bridge.so
+          path: TrustTunnelClient/build/dobby_bridge/libdobby_bridge.so
 
 # -------------------------------------------------------------
 
@@ -115,4 +115,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: dobby_bridge-ios-arm64
-          path: TrustTunnelClient/build/libdobby_bridge.a
+          path: TrustTunnelClient/build/dobby_bridge/libdobby_bridge.a

@@ -62,7 +62,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: dobby_bridge-linux
-          path: TrustTunnelClient/build/libdobby_bridge.so
+          path: TrustTunnelClient/build/dobby_bridge/libdobby_bridge.so
 
 # -------------------------------------------------------------
 
@@ -113,7 +113,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: dobby_bridge-macos
-          path: TrustTunnelClient/build/libdobby_bridge.dylib
+          path: TrustTunnelClient/build/dobby_bridge/libdobby_bridge.dylib
 
 # -------------------------------------------------------------
 
@@ -170,5 +170,5 @@ jobs:
         with:
           name: dobby_bridge-windows
           path: |
-            TrustTunnelClient\build\dobby_bridge.dll
-            TrustTunnelClient\build\dobby_bridge.lib
+            TrustTunnelClient\build\dobby_bridge\*.dll
+            TrustTunnelClient\build\dobby_bridge\*.lib
