@@ -1,0 +1,184 @@
+package manager
+
+/*
+#cgo CFLAGS: -I${SRCDIR}
+
+// --- OS-Specific Linking ---
+// Windows expects a file named dobby_bridge.dll and dobby_bridge.lib in the same directory
+#cgo windows LDFLAGS: -L${SRCDIR}/../lib/windows -ldobby_bridge
+
+// Linux expects a file named dobby_bridge.so
+#cgo linux LDFLAGS: -L${SRCDIR}/../lib/linux -ldobby_bridge -lpthread -ldl -lc++ -lc++abi -lm
+
+// macOS expects a file named dobby_bridge.dylib
+#cgo darwin LDFLAGS: -L${SRCDIR}/../lib/macos -ldobby_bridge -framework CoreFoundation -framework Security
+
+// Android: Link the static library and Android's native logging/networking
+#cgo android LDFLAGS: -L${SRCDIR}/../lib/android/arm64-v8a -ldobby_bridge -llog -lm -lc++_shared
+
+// iOS: Link the static library and Apple's Network Extension frameworks
+#cgo ios LDFLAGS: -L${SRCDIR}/../lib/ios -ldobby_bridge -framework Foundation -framework NetworkExtension
+
+#include <stdlib.h>
+#include "../dobby_bridge/dobby_bridge_common.h"
+
+// C "Gateway" functions
+extern void c_state_changed(void* arg, int state);
+extern void c_log_message(int level, const char* msg);
+extern int c_protect_cb(int fd);
+*/
+import "C"
+import (
+	"sync"
+	"unsafe"
+)
+
+// VpnState represents the VPN connection state
+type VpnState int
+
+const (
+	StateDisconnected VpnState = iota
+	StateConnecting
+	StateConnected
+	StateReconnecting
+	StateError
+)
+
+// LogLevel represents the log level
+type LogLevel int
+
+const (
+	LogError LogLevel = iota
+	LogWarn
+	LogInfo
+	LogDebug
+	LogTrace
+)
+
+// ProtectSocketFunc is the type for socket protection callbacks
+// Returns 0 on success, non-zero on failure
+type ProtectSocketFunc func(fd int) int
+
+// StateChangedFunc is the type for state change callbacks
+type StateChangedFunc func(state VpnState)
+
+// LogFunc is the type for log callbacks
+type LogFunc func(level LogLevel, message string)
+
+// TrustTunnelManager is the main wrapper for the TrustTunnel VPN library
+type TrustTunnelManager struct {
+	config          string
+	protectCallback ProtectSocketFunc
+	stateCallback   StateChangedFunc
+	logCallback     LogFunc
+	mu              sync.RWMutex
+}
+
+// NewTrustTunnelManager creates a new TrustTunnelManager instance
+func NewTrustTunnelManager() *TrustTunnelManager {
+	return &TrustTunnelManager{}
+}
+
+// SetProtectSocketCallback sets a custom socket protection callback
+// This is useful for mobile platforms where you need to protect sockets
+// from the VPN tunnel (e.g., Android's VpnService.protect() or iOS NEPacketTunnelFlow)
+func (t *TrustTunnelManager) SetProtectSocketCallback(cb ProtectSocketFunc) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.protectCallback = cb
+}
+
+// SetStateChangedCallback sets a callback for VPN state changes
+func (t *TrustTunnelManager) SetStateChangedCallback(cb StateChangedFunc) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.stateCallback = cb
+}
+
+// SetLogCallback sets a callback for log messages from the VPN core
+func (t *TrustTunnelManager) SetLogCallback(cb LogFunc) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.logCallback = cb
+}
+
+// Start launches the VPN with the given TOML configuration
+func (t *TrustTunnelManager) Start(tomlConfig string) error {
+	t.mu.Lock()
+	t.config = tomlConfig
+	t.mu.Unlock()
+
+	// Set this as the global instance for C callbacks
+	SetGlobalManager(t)
+
+	// Hook the logger BEFORE starting the engine
+	C.dobby_vpn_set_log_callback((C.dobby_on_log_message_t)(C.c_log_message))
+
+	// Set the protect callback
+	C.dobby_vpn_set_protect_callback((C.dobby_on_protect_socket_t)(C.c_protect_cb))
+
+	cConfig := C.CString(tomlConfig)
+	defer C.free(unsafe.Pointer(cConfig))
+
+	// Pass the TOML string, the bridged C callback, and a nil pointer for the argument
+	C.dobby_vpn_start(cConfig, (C.dobby_on_state_changed_t)(C.c_state_changed), nil)
+	return nil
+}
+
+// Stop halts the VPN and frees resources
+func (t *TrustTunnelManager) Stop() {
+	C.dobby_vpn_stop()
+}
+
+// Global instance for C callbacks
+var globalManager *TrustTunnelManager
+
+// SetGlobalManager sets the global manager instance for C callbacks
+// This is called automatically by Start()
+func SetGlobalManager(manager *TrustTunnelManager) {
+	globalManager = manager
+}
+
+//export go_state_changed
+func go_state_changed(arg unsafe.Pointer, state C.int) {
+	if globalManager == nil {
+		return
+	}
+	globalManager.mu.RLock()
+	cb := globalManager.stateCallback
+	globalManager.mu.RUnlock()
+
+	if cb != nil {
+		cb(VpnState(state))
+	}
+}
+
+//export go_log_message
+func go_log_message(level C.int, msg *C.char) {
+	if globalManager == nil {
+		return
+	}
+	globalManager.mu.RLock()
+	cb := globalManager.logCallback
+	globalManager.mu.RUnlock()
+
+	if cb != nil {
+		goMsg := C.GoString(msg)
+		cb(LogLevel(level), goMsg)
+	}
+}
+
+//export go_protect_socket
+func go_protect_socket(fd C.int) C.int {
+	if globalManager == nil {
+		return 0 // Default to allow
+	}
+	globalManager.mu.RLock()
+	cb := globalManager.protectCallback
+	globalManager.mu.RUnlock()
+
+	if cb != nil {
+		return C.int(cb(int(fd)))
+	}
+	return 0 // Default to allow
+}

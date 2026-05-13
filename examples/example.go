@@ -1,34 +1,34 @@
-// Example usage of the DobbyBridge Go wrapper
+// Example usage of the TrustTunnel Go wrapper
 package main
 
 import (
 	"log"
 	"time"
 
-	"github.com/yourusername/trusttunnel-go/dobby_bridge"
+	tt "trusttunnel-go/manager"
 )
 
 func main() {
-	// Create a new DobbyBridge instance
-	bridge := dobby_bridge.NewDobbyBridge()
+	// Create a new TrustTunnelManager instance
+	manager := tt.NewTrustTunnelManager()
 
 	// Set up callbacks
-	bridge.SetStateChangedCallback(func(state dobby_bridge.VpnState) {
+	manager.SetStateChangedCallback(func(state tt.VpnState) {
 		log.Printf("VPN State changed: %v", state)
 	})
 
-	bridge.SetLogCallback(func(level dobby_bridge.LogLevel, message string) {
+	manager.SetLogCallback(func(level tt.LogLevel, message string) {
 		log.Printf("[%v] %s", level, message)
 	})
 
 	// Optional: Set custom socket protection callback
 	// This allows you to implement your own socket protection logic
-	bridge.SetProtectSocketCallback(func(fd int) int {
+	// For example, on Android you might call VpnService.protect(fd)
+	// On iOS you might bind the socket to a specific interface
+	// On Linux you might use SO_BINDTODEVICE
+	// On Windows you might use Wintun
+	manager.SetProtectSocketCallback(func(fd int) int {
 		// Your custom socket protection logic here
-		// For example, on Android you might call VpnService.protect(fd)
-		// On iOS you might bind the socket to a specific interface
-		// On Linux you might use SO_BINDTODEVICE
-		// On Windows you might use Wintun
 		log.Printf("Protecting socket fd: %d", fd)
 		return 0 // Return 0 on success, non-zero on failure
 	})
@@ -55,7 +55,7 @@ location = "us-east"
 
 	// Start the VPN
 	log.Println("Starting VPN...")
-	if err := bridge.Start(config); err != nil {
+	if err := manager.Start(config); err != nil {
 		log.Fatalf("Failed to start VPN: %v", err)
 	}
 
@@ -65,9 +65,7 @@ location = "us-east"
 
 	// Stop the VPN
 	log.Println("Stopping VPN...")
-	if err := bridge.Stop(); err != nil {
-		log.Fatalf("Failed to stop VPN: %v", err)
-	}
+	manager.Stop()
 
 	log.Println("VPN stopped.")
 }

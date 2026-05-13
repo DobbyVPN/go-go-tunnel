@@ -111,18 +111,18 @@ import (
     "log"
     "time"
     
-    "github.com/yourusername/trusttunnel-go/dobby_bridge"
+    "trusttunnel-go/dobby_bridge"
 )
 
 func main() {
-    bridge := dobby_bridge.NewDobbyBridge()
+    manager := dobby_bridge.NewTrustTunnelManager()
     
     // Set up callbacks
-    bridge.SetStateChangedCallback(func(state dobby_bridge.VpnState) {
+    manager.SetStateChangedCallback(func(state dobby_bridge.VpnState) {
         log.Printf("VPN State changed: %v", state)
     })
     
-    bridge.SetLogCallback(func(level dobby_bridge.LogLevel, message string) {
+    manager.SetLogCallback(func(level dobby_bridge.LogLevel, message string) {
         log.Printf("[%v] %s", level, message)
     })
     
@@ -141,15 +141,13 @@ type = "socks"
 address = "127.0.0.1:1080"
 `
     
-    if err := bridge.Start(config); err != nil {
+    if err := manager.Start(config); err != nil {
         log.Fatal(err)
     }
     
     time.Sleep(30 * time.Second)
     
-    if err := bridge.Stop(); err != nil {
-        log.Fatal(err)
-    }
+    manager.Stop()
 }
 ```
 
@@ -158,7 +156,7 @@ address = "127.0.0.1:1080"
 You can provide your own socket protection implementation:
 
 ```go
-bridge.SetProtectSocketCallback(func(fd int) int {
+manager.SetProtectSocketCallback(func(fd int) int {
     // Your custom socket protection logic
     // Return 0 on success, non-zero on failure
     return 0
@@ -169,7 +167,7 @@ bridge.SetProtectSocketCallback(func(fd int) int {
 
 **Android:**
 ```go
-bridge.SetProtectSocketCallback(func(fd int) int {
+manager.SetProtectSocketCallback(func(fd int) int {
     // Call VpnService.protect(fd) via JNI
     return protectSocketViaJNI(fd)
 })
@@ -177,7 +175,7 @@ bridge.SetProtectSocketCallback(func(fd int) int {
 
 **iOS:**
 ```go
-bridge.SetProtectSocketCallback(func(fd int) int {
+manager.SetProtectSocketCallback(func(fd int) int {
     // Bind socket to specific interface
     return bindSocketToInterface(fd, "en0")
 })
@@ -185,7 +183,7 @@ bridge.SetProtectSocketCallback(func(fd int) int {
 
 **Linux:**
 ```go
-bridge.SetProtectSocketCallback(func(fd int) int {
+manager.SetProtectSocketCallback(func(fd int) int {
     // Use SO_BINDTODEVICE
     return bindSocketToDevice(fd, "eth0")
 })
@@ -193,9 +191,48 @@ bridge.SetProtectSocketCallback(func(fd int) int {
 
 **Windows:**
 ```go
-bridge.SetProtectSocketCallback(func(fd int) int {
+manager.SetProtectSocketCallback(func(fd int) int {
     // Use Wintun API
     return protectSocketViaWintun(fd)
+})
+```
+
+## Pure Go API
+
+This library provides a **pure Go API** that doesn't require importing the `"C"` package in your application code. This makes it easy to use as a library distributed via `go mod`.
+
+### Key Features
+
+- **No `"C"` import required**: Use the library without cgo in your code
+- **Type-safe callbacks**: Pass Go functions directly
+- **Thread-safe**: All operations are protected with mutexes
+- **Library-friendly**: Can be distributed as a Go module
+
+### Why This Matters
+
+The old API required users to import `"C"` to cast function pointers:
+
+```go
+// Old API - Required importing "C"
+import "C"
+
+func SetMobileProtectCallback(ptr unsafe.Pointer) {
+    globalProtectCallback = (C.protect_cb_t)(ptr)
+}
+```
+
+This caused problems because:
+- The `"C"` package can only be imported in files with cgo directives
+- Library consumers couldn't use it when importing via `go mod`
+- Using `unsafe.Pointer` is error-prone
+
+The new API solves these issues:
+
+```go
+// New API - Pure Go, no "C" import needed!
+manager.SetProtectSocketCallback(func(fd int) int {
+    // Your callback logic here
+    return 0
 })
 ```
 
@@ -208,12 +245,11 @@ bridge.SetProtectSocketCallback(func(fd int) int {
 type VpnState int
 
 const (
-    VpnStateDisconnected VpnState = iota
-    VpnStateConnecting
-    VpnStateConnected
-    VpnStateWaitingRecovery
-    VpnStateRecovering
-    VpnStateWaitingForNetwork
+    StateDisconnected VpnState = iota
+    StateConnecting
+    StateConnected
+    StateReconnecting
+    StateError
 )
 ```
 
@@ -222,55 +258,55 @@ const (
 type LogLevel int
 
 const (
-    LogLevelTrace LogLevel = iota
-    LogLevelDebug
-    LogLevelInfo
-    LogLevelWarn
-    LogLevelError
+    LogError LogLevel = iota
+    LogWarn
+    LogInfo
+    LogDebug
+    LogTrace
 )
 ```
 
-### Callbacks
+### Callback Types
 
-#### `StateChangedCallback`
+#### `ProtectSocketFunc`
 ```go
-type StateChangedCallback func(state VpnState)
+type ProtectSocketFunc func(fd int) int
+```
+
+Called when a socket needs to be protected from the VPN tunnel. Returns 0 on success, non-zero on failure.
+
+#### `StateChangedFunc`
+```go
+type StateChangedFunc func(state VpnState)
 ```
 
 Called when the VPN state changes.
 
-#### `LogCallback`
+#### `LogFunc`
 ```go
-type LogCallback func(level LogLevel, message string)
+type LogFunc func(level LogLevel, message string)
 ```
 
 Called when the VPN library logs a message.
 
-#### `ProtectSocketCallback`
-```go
-type ProtectSocketCallback func(fd int) int
-```
-
-Called to protect a socket from being routed through the VPN. Return 0 on success, non-zero on failure.
-
 ### Methods
 
-#### `NewDobbyBridge() *DobbyBridge`
-Creates a new DobbyBridge instance.
+#### `NewTrustTunnelManager() *TrustTunnelManager`
+Creates a new TrustTunnelManager instance.
 
-#### `SetStateChangedCallback(cb StateChangedCallback)`
+#### `SetStateChangedCallback(cb StateChangedFunc)`
 Sets the callback that will be called when the VPN state changes.
 
-#### `SetLogCallback(cb LogCallback)`
+#### `SetLogCallback(cb LogFunc)`
 Sets the callback that will be called when the VPN library logs a message.
 
-#### `SetProtectSocketCallback(cb ProtectSocketCallback)`
-Sets the callback that will be called to protect a socket.
+#### `SetProtectSocketCallback(cb ProtectSocketFunc)`
+Sets the callback that will be called to protect a socket from the VPN tunnel.
 
 #### `Start(config string) error`
 Starts the VPN connection with the given TOML configuration.
 
-#### `Stop() error`
+#### `Stop()`
 Stops the VPN connection.
 
 ## Configuration
