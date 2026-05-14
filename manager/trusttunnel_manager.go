@@ -108,13 +108,10 @@ func (t *TrustTunnelManager) Start(tomlConfig string) error {
 	t.config = tomlConfig
 	t.mu.Unlock()
 
-	// Set this as the global instance for C callbacks
 	SetGlobalManager(t)
 
-	// Hook the logger BEFORE starting the engine
 	C.dobby_vpn_set_log_callback((C.dobby_on_log_message_t)(C.c_log_message))
 
-	// Set the protect callback
 	C.dobby_vpn_set_protect_callback((C.dobby_on_protect_socket_t)(C.c_protect_cb))
 
 	cConfig := C.CString(tomlConfig)

@@ -1,4 +1,4 @@
-package dobby_bridge
+package manager
 
 import (
 	"testing"
