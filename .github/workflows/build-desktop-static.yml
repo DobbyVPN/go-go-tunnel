@@ -1,0 +1,252 @@
+name: Build Static Libraries (for Go Distribution)
+
+env:
+  CONAN_VER: 2.12
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'dobby_bridge/**'
+      - 'TrustTunnelClient/**'
+      - '.github/workflows/build-desktop-static.yml'
+  release:
+    types: [created]
+
+jobs:
+  build-static-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout Code with Submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install LLVM and Dependencies
+        run: |
+          brew install ninja llvm@21
+          sed -i '' 's/_LIBCPP_INTRODUCED_IN_LLVM_21 1/_LIBCPP_INTRODUCED_IN_LLVM_21 0/g' "$(brew --prefix llvm@21)/include/c++/v1/__configuration/availability.h"
+          pip install conan~=$CONAN_VER
+          echo "/opt/homebrew/opt/llvm@21/bin" >> $GITHUB_PATH
+
+      - name: Bootstrap Conan
+        working-directory: TrustTunnelClient
+        run: python ./scripts/bootstrap_conan_deps.py
+
+      - name: Inject dobby_bridge into TrustTunnelClient CMakeLists.txt
+        working-directory: TrustTunnelClient
+        run: |
+          echo 'add_subdirectory("../dobby_bridge" "dobby_bridge")' >> CMakeLists.txt
+
+      - name: Configure and Build Static Library
+        working-directory: TrustTunnelClient
+        shell: bash
+        run: |
+          mkdir build && cd build
+          cmake -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER="clang" \
+            -DCMAKE_CXX_COMPILER="clang++" \
+            -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
+            -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+            -DBUILD_STATIC_LIBS=ON \
+            -G "Ninja" ..
+          cmake --build . --target dobby_bridge
+
+      - name: Verify Static Library
+        working-directory: TrustTunnelClient/build/dobby_bridge
+        run: |
+          ls -lh libdobby_bridge.a
+          file libdobby_bridge.a
+
+      - name: Upload macOS Static Library
+        uses: actions/upload-artifact@v4
+        with:
+          name: dobby_bridge-macos-static
+          path: TrustTunnelClient/build/dobby_bridge/libdobby_bridge.a
+
+  build-static-linux:
+    runs-on: ubuntu-22.04
+    env:
+      LLVM_MAJOR_VER: 21
+    steps:
+      - name: Checkout Code with Submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install LLVM and Dependencies
+        run: |
+          sudo apt install -y ninja-build
+          pip install conan~=$CONAN_VER
+          curl -O https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh $LLVM_MAJOR_VER
+          sudo apt install -y libc++-${LLVM_MAJOR_VER}-dev libclang-rt-${LLVM_MAJOR_VER}-dev libc++abi-${LLVM_MAJOR_VER}-dev
+          echo "/usr/lib/llvm-$LLVM_MAJOR_VER/bin" >> $GITHUB_PATH
+
+      - name: Bootstrap Conan
+        working-directory: TrustTunnelClient
+        run: python ./scripts/bootstrap_conan_deps.py
+
+      - name: Inject dobby_bridge into TrustTunnelClient CMakeLists.txt
+        working-directory: TrustTunnelClient
+        run: |
+          echo 'add_subdirectory("../dobby_bridge" "dobby_bridge")' >> CMakeLists.txt
+
+      - name: Configure and Build Static Library
+        working-directory: TrustTunnelClient
+        shell: bash
+        run: |
+          mkdir build && cd build
+          cmake -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER="clang" \
+            -DCMAKE_CXX_COMPILER="clang++" \
+            -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
+            -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+            -DBUILD_STATIC_LIBS=ON \
+            -G "Ninja" ..
+          cmake --build . --target dobby_bridge
+
+      - name: Verify Static Library
+        working-directory: TrustTunnelClient/build/dobby_bridge
+        run: |
+          ls -lh libdobby_bridge.a
+          file libdobby_bridge.a
+
+      - name: Upload Linux Static Library
+        uses: actions/upload-artifact@v4
+        with:
+          name: dobby_bridge-linux-static
+          path: TrustTunnelClient/build/dobby_bridge/libdobby_bridge.a
+
+  build-static-windows:
+    runs-on: windows-latest
+    env:
+      MSVC_VER: 17
+      MSVC_YEAR: 2022
+    steps:
+      - name: Checkout Code with Submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Set up MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Install Dependencies
+        run: |
+          choco install strawberryperl nasm
+          pip install conan~=${{ env.CONAN_VER }} ninja
+
+      - name: Bootstrap Conan
+        working-directory: TrustTunnelClient
+        run: python ./scripts/bootstrap_conan_deps.py
+
+      - name: Inject dobby_bridge into TrustTunnelClient CMakeLists.txt
+        working-directory: TrustTunnelClient
+        run: |
+          Add-Content -Path CMakeLists.txt -Value 'add_subdirectory("../dobby_bridge" "dobby_bridge")'
+
+      - name: Configure and Build Static Library
+        working-directory: TrustTunnelClient
+        run: |
+          mkdir build
+          cd build
+          cmake -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_C_COMPILER="cl.exe" `
+            -DCMAKE_CXX_COMPILER="cl.exe" `
+            -DBUILD_STATIC_LIBS=ON `
+            -G "Ninja" ..
+          cmake --build . --target dobby_bridge
+
+      - name: Verify Static Library
+        working-directory: TrustTunnelClient/build/dobby_bridge
+        run: |
+          dir *.lib
+          
+      - name: Upload Windows Static Library
+        uses: actions/upload-artifact@v4
+        with:
+          name: dobby_bridge-windows-static
+          path: TrustTunnelClient/build/dobby_bridge/dobby_bridge.lib
+
+  commit-libraries:
+    needs: [build-static-macos, build-static-linux, build-static-windows]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'release'
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Download macOS Static Library
+        uses: actions/download-artifact@v4
+        with:
+          name: dobby_bridge-macos-static
+          path: lib/macos
+
+      - name: Download Linux Static Library
+        uses: actions/download-artifact@v4
+        with:
+          name: dobby_bridge-linux-static
+          path: lib/linux
+
+      - name: Download Windows Static Library
+        uses: actions/download-artifact@v4
+        with:
+          name: dobby_bridge-windows-static
+          path: lib/windows
+
+      - name: Verify Libraries
+        run: |
+          echo "=== macOS ==="
+          ls -lh lib/macos/
+          file lib/macos/libdobby_bridge.a
+          echo ""
+          echo "=== Linux ==="
+          ls -lh lib/linux/
+          file lib/linux/libdobby_bridge.a
+          echo ""
+          echo "=== Windows ==="
+          ls -lh lib/windows/
+          file lib/windows/dobby_bridge.lib
+
+      - name: Configure Git
+        run: |
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions@github.com"
+
+      - name: Commit and Push Static Libraries
+        run: |
+          git add lib/macos/libdobby_bridge.a
+          git add lib/linux/libdobby_bridge.a
+          git add lib/windows/dobby_bridge.lib
+          
+          # Check if there are changes to commit
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: update static libraries [skip ci]"
+            git push
+          fi

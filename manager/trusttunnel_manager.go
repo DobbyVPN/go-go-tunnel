@@ -3,26 +3,38 @@ package manager
 /*
 #cgo CFLAGS: -I${SRCDIR}
 
-// --- OS-Specific Linking ---
-// Windows expects a file named dobby_bridge.dll and dobby_bridge.lib in the same directory
-#cgo windows LDFLAGS: -L${SRCDIR}/../lib/windows -ldobby_bridge
+// --- Static Linking Configuration ---
+// This links the static library directly, making the library truly "go gettable"
 
-// Linux expects a file named dobby_bridge.so
-#cgo linux LDFLAGS: -L${SRCDIR}/../lib/linux -ldobby_bridge -lpthread -ldl -lc++ -lc++abi -lm
+// macOS: Link static library with required frameworks
+#cgo darwin LDFLAGS: ${SRCDIR}/../lib/macos/libdobby_bridge.a -framework CoreFoundation -framework Security -framework Network -lc++ -lresolv
 
-// macOS expects a file named dobby_bridge.dylib
-#cgo darwin LDFLAGS: -L${SRCDIR}/../lib/macos -ldobby_bridge -framework CoreFoundation -framework Security
+// Linux: Link static library with required system libraries
+#cgo linux LDFLAGS: ${SRCDIR}/../lib/linux/libdobby_bridge.a -lpthread -ldl -lc++ -lc++abi -lm -lresolv
 
-// Android: Link the static library and Android's native logging/networking
-#cgo android LDFLAGS: -L${SRCDIR}/../lib/android/arm64-v8a -ldobby_bridge -llog -lm -lc++_shared
+// Windows: Link static library with required system libraries
+#cgo windows LDFLAGS: ${SRCDIR}/../lib/windows/dobby_bridge.lib -lws2_32 -liphlpapi
 
-// iOS: Link the static library and Apple's Network Extension frameworks
-#cgo ios LDFLAGS: -L${SRCDIR}/../lib/ios -ldobby_bridge -framework Foundation -framework NetworkExtension
+// iOS: Link static library explicitly (Apple strongly prefers static linking)
+#cgo ios,arm64 LDFLAGS: ${SRCDIR}/../lib/ios/libdobby_bridge.a -framework Foundation -framework NetworkExtension -framework Network -lc++ -lresolv
+
+// Android: Link static library for each ABI (architecture)
+// ARM64 (most common - modern 64-bit ARM devices)
+#cgo android,arm64 LDFLAGS: ${SRCDIR}/../lib/android/arm64-v8a/libdobby_bridge.a -llog -lm -lc++_static
+
+// ARM32 (legacy 32-bit ARM devices)
+#cgo android,arm LDFLAGS: ${SRCDIR}/../lib/android/armeabi-v7a/libdobby_bridge.a -llog -lm -lc++_static
+
+// x86_64 (64-bit x86 - emulators and some tablets)
+#cgo android,amd64 LDFLAGS: ${SRCDIR}/../lib/android/x86_64/libdobby_bridge.a -llog -lm -lc++_static
+
+// x86 (32-bit x86 - old emulators)
+#cgo android,386 LDFLAGS: ${SRCDIR}/../lib/android/x86/libdobby_bridge.a -llog -lm -lc++_static
 
 #include <stdlib.h>
 #include "../dobby_bridge/dobby_bridge_common.h"
 
-// C "Gateway" functions
+// C bridge functions (defined in bridge.c)
 extern void c_state_changed(void* arg, int state);
 extern void c_log_message(int level, const char* msg);
 extern int c_protect_cb(int fd);

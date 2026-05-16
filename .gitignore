@@ -1,0 +1,60 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test :c`
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Dependency directories (remove the comment below to include it)
+# vendor/
+
+# Go workspace file
+go.work
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build directories
+build/
+dist/
+TrustTunnelClient/build/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+.conan2/
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+
+# Temporary files
+*.log
+*.tmp
+
+# Keep static libraries in lib/ (these are committed)
+!lib/**/*.a
+!lib/**/*.lib
+
+# But ignore dynamic libraries (these are downloaded)
+lib/**/*.dylib
+lib/**/*.so
+lib/**/*.dll

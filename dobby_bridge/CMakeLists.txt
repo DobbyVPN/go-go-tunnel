@@ -1,5 +1,8 @@
 # We are injected into AdGuard's tree, so we have direct access to their core targets!
 
+# Option to build static or shared library
+option(BUILD_STATIC_LIBS "Build static library instead of shared" OFF)
+
 # Platform-specific source file selection
 if(WIN32)
     set(DOBBY_BRIDGE_SOURCE dobby_bridge_windows.cpp)
@@ -12,7 +15,14 @@ else()
     set(DOBBY_BRIDGE_SOURCE dobby_bridge_unix.cpp)
 endif()
 
-add_library(dobby_bridge SHARED ${DOBBY_BRIDGE_SOURCE})
+# Create library (static or shared based on option)
+if(BUILD_STATIC_LIBS)
+    add_library(dobby_bridge STATIC ${DOBBY_BRIDGE_SOURCE})
+    message(STATUS "Building dobby_bridge as STATIC library")
+else()
+    add_library(dobby_bridge SHARED ${DOBBY_BRIDGE_SOURCE})
+    message(STATUS "Building dobby_bridge as SHARED library")
+endif()
 
 # Include the common header
 target_include_directories(dobby_bridge PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
