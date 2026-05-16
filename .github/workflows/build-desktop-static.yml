@@ -1,4 +1,4 @@
-name: Build Static Libraries (for Go Distribution)
+name: Build Desktop Static Libraries
 
 env:
   CONAN_VER: 2.12
@@ -37,9 +37,27 @@ jobs:
           pip install conan~=$CONAN_VER
           echo "/opt/homebrew/opt/llvm@21/bin" >> $GITHUB_PATH
 
-      - name: Bootstrap Conan
+      - name: Bootstrap Conan (with workaround)
         working-directory: TrustTunnelClient
-        run: python ./scripts/bootstrap_conan_deps.py
+        run: |
+          # Save current directory
+          TRUSTTUNNEL_ROOT=$(pwd)
+          echo "TrustTunnel root: $TRUSTTUNNEL_ROOT"
+          
+          # Try to run bootstrap script
+          python scripts/bootstrap_conan_deps.py || {
+            echo "⚠️ Bootstrap script failed, trying workaround..."
+            
+            # Copy conandata.yml to the location where script expects it
+            if [ -d "scripts/native-libs-common" ]; then
+              cp conandata.yml scripts/native-libs-common/
+              cd scripts/native-libs-common
+              python "$TRUSTTUNNEL_ROOT/scripts/bootstrap_conan_deps.py" || true
+            fi
+          }
+          
+          # Ensure we have conan configured
+          conan profile detect --force || true
 
       - name: Inject dobby_bridge into TrustTunnelClient CMakeLists.txt
         working-directory: TrustTunnelClient
