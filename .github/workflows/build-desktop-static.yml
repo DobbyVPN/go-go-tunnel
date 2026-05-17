@@ -148,10 +148,11 @@ jobs:
         with:
           python-version: '3.13'
 
-      - name: Set up MSVC
-        uses: ilammy/msvc-dev-cmd@v1
+      - name: Install LLVM-MinGW Toolchain
+        uses: msys2/setup-msys2@v2
         with:
-          arch: x64
+          update: true
+          install: mingw-w64-clang-x86_64-toolchain
 
       - name: Install Dependencies
         run: |
@@ -172,8 +173,10 @@ jobs:
           mkdir build
           cd build
           cmake -DCMAKE_BUILD_TYPE=Release `
-            -DCMAKE_C_COMPILER="cl.exe" `
-            -DCMAKE_CXX_COMPILER="cl.exe" `
+            -DCMAKE_C_COMPILER="clang" `
+            -DCMAKE_CXX_COMPILER="clang++" `
+            -DCMAKE_CXX_FLAGS="-target x86_64-pc-windows-gnu --sysroot=C:/PROGRA~1/Git/mingw64" `
+            -DCMAKE_C_FLAGS="-target x86_64-pc-windows-gnu --sysroot=C:/PROGRA~1/Git/mingw64" `
             -DBUILD_STATIC_LIBS=ON `
             -G "Ninja" ..
           cmake --build . --target dobby_bridge

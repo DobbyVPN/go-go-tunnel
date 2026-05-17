@@ -4,16 +4,15 @@ package manager
 #cgo CFLAGS: -I${SRCDIR}
 
 // --- Static Linking Configuration ---
-// This links the static library directly, making the library truly "go gettable"
 
 // macOS: Link static library with required frameworks
-#cgo darwin LDFLAGS: ${SRCDIR}/../lib/macos/libdobby_bridge.a -framework CoreFoundation -framework Security -framework Network -lc++ -lresolv
+#cgo darwin LDFLAGS: -L${SRCDIR}/../lib/macos -ldobby_bridge -framework CoreFoundation -framework Security -framework Network -lc++ -lresolv
 
 // Linux: Link static library with required system libraries
-#cgo linux LDFLAGS: ${SRCDIR}/../lib/linux/libdobby_bridge.a -lpthread -ldl -lc++ -lc++abi -lm -lresolv
+#cgo linux LDFLAGS: -L${SRCDIR}/../lib/linux -ldobby_bridge -lpthread -ldl -lc++ -lc++abi -lm
 
 // Windows: Link static library with required system libraries
-#cgo windows LDFLAGS: ${SRCDIR}/../lib/windows/dobby_bridge.lib -lws2_32 -liphlpapi
+#cgo windows LDFLAGS: -L${SRCDIR}/../lib/windows -ldobby_bridge
 
 // iOS: Link static library explicitly (Apple strongly prefers static linking)
 #cgo ios,arm64 LDFLAGS: ${SRCDIR}/../lib/ios/libdobby_bridge.a -framework Foundation -framework NetworkExtension -framework Network -lc++ -lresolv
