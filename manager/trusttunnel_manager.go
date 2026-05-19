@@ -3,16 +3,25 @@ package manager
 /*
 #cgo CFLAGS: -I${SRCDIR}
 
-// --- Static Linking Configuration ---
+// --- Bundled Static Linking Configuration ---
+//
+// The libdobby_bridge.a library is a "fat" static library that includes:
+// - dobby_bridge code (our C++ wrapper)
+// - TrustTunnel core libraries (vpnlibs_trusttunnel, vpnlibs_core, vpnlibs_net, vpnlibs_common)
+// - OpenSSL (libssl, libcrypto)
+// - libevent (event, event_core, event_extra, event_openssl, event_pthreads)
+// - Other dependencies (fmt, magic_enum, tomlplusplus, etc.)
+//
+// We only need to link system libraries and frameworks that aren't included.
 
-// macOS: Link static library with required frameworks
+// macOS: Link bundled static library with required system frameworks
 #cgo darwin LDFLAGS: -L${SRCDIR}/../lib/macos -ldobby_bridge -framework CoreFoundation -framework Security -framework Network -lc++ -lresolv
 
-// Linux: Link static library with required system libraries
-#cgo linux LDFLAGS: -L${SRCDIR}/../lib/linux -ldobby_bridge -lpthread -ldl -lc++ -lc++abi -lm
+// Linux: Link bundled static library with required system libraries
+#cgo linux LDFLAGS: -L${SRCDIR}/../lib/linux -ldobby_bridge -lpthread -ldl -lc++ -lc++abi -lm -lresolv
 
-// Windows: Link static library with required system libraries
-#cgo windows LDFLAGS: -L${SRCDIR}/../lib/windows -ldobby_bridge
+// Windows: Link bundled static library with required system libraries
+#cgo windows LDFLAGS: -L${SRCDIR}/../lib/windows -ldobby_bridge -lws2_32 -liphlpapi -lcrypt32 -lbcrypt
 
 // iOS: Link static library explicitly (Apple strongly prefers static linking)
 #cgo ios,arm64 LDFLAGS: ${SRCDIR}/../lib/ios/libdobby_bridge.a -framework Foundation -framework NetworkExtension -framework Network -lc++ -lresolv

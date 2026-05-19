@@ -60,11 +60,73 @@ jobs:
             -G "Ninja" ..
           cmake --build . --target dobby_bridge
 
-      - name: Verify Static Library
+      - name: Bundle All Dependencies into Single Archive
+        working-directory: TrustTunnelClient/build
+        shell: bash
+        run: |
+          echo "Finding all required static libraries..."
+          
+          # Create temporary directory for extraction
+          TEMP_DIR=$(mktemp -d)
+          EXTRACT_DIR="$TEMP_DIR/extracted"
+          mkdir -p "$EXTRACT_DIR"
+          
+          # Extract dobby_bridge
+          echo "   Extracting dobby_bridge..."
+          mkdir -p "$EXTRACT_DIR/dobby_bridge"
+          cd "$EXTRACT_DIR/dobby_bridge"
+          ar x "$OLDPWD/dobby_bridge/libdobby_bridge.a"
+          
+          # Find and extract TrustTunnel core libraries
+          cd "$OLDPWD"
+          VPNLIBS=$(find . -name "libvpnlibs_*.a" 2>/dev/null || true)
+          
+          for lib in $VPNLIBS; do
+            libname=$(basename "$lib" .a)
+            echo "   Extracting $libname..."
+            mkdir -p "$EXTRACT_DIR/$libname"
+            cd "$EXTRACT_DIR/$libname"
+            ar x "$OLDPWD/$lib"
+          done
+          
+          # Extract Conan dependencies (OpenSSL, libevent, etc.)
+          cd "$OLDPWD"
+          CONAN_LIBS=$(find . -path "*/lib/*.a" -name "*.a" 2>/dev/null | grep -E "(ssl|crypto|event|fmt|magic_enum|toml)" || true)
+          
+          for lib in $CONAN_LIBS; do
+            libname=$(basename "$lib" .a | sed 's/^lib//')
+            echo "   Extracting $libname..."
+            mkdir -p "$EXTRACT_DIR/$libname"
+            cd "$EXTRACT_DIR/$libname"
+            ar x "$lib" 2>/dev/null || true
+          done
+          
+          # Create combined static library
+          echo "Creating bundled static library..."
+          cd "$EXTRACT_DIR"
+          
+          # Find all object files
+          OBJ_FILES=$(find . -name "*.o")
+          
+          if [ -z "$OBJ_FILES" ]; then
+            echo "No object files found!"
+            exit 1
+          fi
+          
+          # Create the combined archive
+          ar rcs "$OLDPWD/dobby_bridge/libdobby_bridge.a" $OBJ_FILES
+          
+          # Cleanup
+          rm -rf "$TEMP_DIR"
+          
+          echo "Bundled library created"
+
+      - name: Verify Bundled Static Library
         working-directory: TrustTunnelClient/build/dobby_bridge
         run: |
           ls -lh libdobby_bridge.a
           file libdobby_bridge.a
+          echo "Object file count: $(ar t libdobby_bridge.a | wc -l)"
 
       - name: Upload macOS Static Library
         uses: actions/upload-artifact@v4
@@ -120,11 +182,73 @@ jobs:
             -G "Ninja" ..
           cmake --build . --target dobby_bridge
 
-      - name: Verify Static Library
+      - name: Bundle All Dependencies into Single Archive
+        working-directory: TrustTunnelClient/build
+        shell: bash
+        run: |
+          echo "Finding all required static libraries..."
+          
+          # Create temporary directory for extraction
+          TEMP_DIR=$(mktemp -d)
+          EXTRACT_DIR="$TEMP_DIR/extracted"
+          mkdir -p "$EXTRACT_DIR"
+          
+          # Extract dobby_bridge
+          echo "   Extracting dobby_bridge..."
+          mkdir -p "$EXTRACT_DIR/dobby_bridge"
+          cd "$EXTRACT_DIR/dobby_bridge"
+          ar x "$OLDPWD/dobby_bridge/libdobby_bridge.a"
+          
+          # Find and extract TrustTunnel core libraries
+          cd "$OLDPWD"
+          VPNLIBS=$(find . -name "libvpnlibs_*.a" 2>/dev/null || true)
+          
+          for lib in $VPNLIBS; do
+            libname=$(basename "$lib" .a)
+            echo "   Extracting $libname..."
+            mkdir -p "$EXTRACT_DIR/$libname"
+            cd "$EXTRACT_DIR/$libname"
+            ar x "$OLDPWD/$lib"
+          done
+          
+          # Extract Conan dependencies (OpenSSL, libevent, etc.)
+          cd "$OLDPWD"
+          CONAN_LIBS=$(find . -path "*/lib/*.a" -name "*.a" 2>/dev/null | grep -E "(ssl|crypto|event|fmt|magic_enum|toml)" || true)
+          
+          for lib in $CONAN_LIBS; do
+            libname=$(basename "$lib" .a | sed 's/^lib//')
+            echo "   Extracting $libname..."
+            mkdir -p "$EXTRACT_DIR/$libname"
+            cd "$EXTRACT_DIR/$libname"
+            ar x "$lib" 2>/dev/null || true
+          done
+          
+          # Create combined static library
+          echo "Creating bundled static library..."
+          cd "$EXTRACT_DIR"
+          
+          # Find all object files
+          OBJ_FILES=$(find . -name "*.o")
+          
+          if [ -z "$OBJ_FILES" ]; then
+            echo "No object files found!"
+            exit 1
+          fi
+          
+          # Create the combined archive
+          ar rcs "$OLDPWD/dobby_bridge/libdobby_bridge.a" $OBJ_FILES
+          
+          # Cleanup
+          rm -rf "$TEMP_DIR"
+          
+          echo "Bundled library created"
+
+      - name: Verify Bundled Static Library
         working-directory: TrustTunnelClient/build/dobby_bridge
         run: |
           ls -lh libdobby_bridge.a
           file libdobby_bridge.a
+          echo "Object file count: $(ar t libdobby_bridge.a | wc -l)"
 
       - name: Upload Linux Static Library
         uses: actions/upload-artifact@v4
@@ -148,11 +272,10 @@ jobs:
         with:
           python-version: '3.13'
 
-      - name: Install LLVM-MinGW Toolchain
-        uses: msys2/setup-msys2@v2
+      - name: Set up MSVC
+        uses: ilammy/msvc-dev-cmd@v1
         with:
-          update: true
-          install: mingw-w64-clang-x86_64-toolchain
+          arch: x64
 
       - name: Install Dependencies
         run: |
@@ -167,24 +290,47 @@ jobs:
         run: |
           Add-Content -Path CMakeLists.txt -Value 'add_subdirectory("../dobby_bridge" "dobby_bridge")'
 
-      - name: Configure and Build Static Library
+      - name: Configure and Build Static Library (MSVC)
         working-directory: TrustTunnelClient
+        shell: cmd
         run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
           mkdir build
           cd build
-          cmake -DCMAKE_BUILD_TYPE=Release `
-            -DCMAKE_C_COMPILER="clang" `
-            -DCMAKE_CXX_COMPILER="clang++" `
-            -DCMAKE_CXX_FLAGS="-target x86_64-pc-windows-gnu --sysroot=C:/PROGRA~1/Git/mingw64" `
-            -DCMAKE_C_FLAGS="-target x86_64-pc-windows-gnu --sysroot=C:/PROGRA~1/Git/mingw64" `
-            -DBUILD_STATIC_LIBS=ON `
+          cmake -DCMAKE_BUILD_TYPE=Release ^
+            -DCMAKE_C_COMPILER="cl.exe" ^
+            -DCMAKE_CXX_COMPILER="cl.exe" ^
+            -DCMAKE_POSITION_INDEPENDENT_CODE=ON ^
+            -DBUILD_STATIC_LIBS=ON ^
             -G "Ninja" ..
           cmake --build . --target dobby_bridge
 
-      - name: Verify Static Library
+      - name: Bundle All Dependencies into Single Archive (Windows)
+        working-directory: TrustTunnelClient/build
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+          echo Finding all required static libraries...
+          
+          REM Find all .lib files
+          set LIBS=
+          for /r %%f in (*.lib) do (
+            echo Found: %%f
+            set LIBS=!LIBS! "%%f"
+          )
+          
+          REM Combine all libraries
+          echo Creating bundled library...
+          lib.exe /OUT:dobby_bridge\dobby_bridge.lib %LIBS%
+          
+          echo Bundled library created
+
+      - name: Verify Bundled Static Library
         working-directory: TrustTunnelClient/build/dobby_bridge
         run: |
-          dir *.lib
+          dir dobby_bridge.lib
+          lib /LIST dobby_bridge.lib > lib_contents.txt
+          powershell -Command "Get-Content lib_contents.txt | Measure-Object -Line | Select-Object -ExpandProperty Lines"
           
       - name: Upload Windows Static Library
         uses: actions/upload-artifact@v4
