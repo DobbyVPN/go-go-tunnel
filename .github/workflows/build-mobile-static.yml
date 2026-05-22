@@ -36,9 +36,17 @@ jobs:
           brew install ninja
           pip install conan~=$CONAN_VER
 
+      - name: Patch dns-libs version in conanfile.py
+        working-directory: TrustTunnelClient
+        run: |
+          # Update dns-libs version from 2.8.51 to 2.8.52 (upstream TrustTunnel hasn't updated yet)
+          sed -i '' 's/dns-libs\/2.8.51@/dns-libs\/2.8.52@/' conanfile.py
+          echo "Patched conanfile.py to use dns-libs 2.8.52"
+          grep "dns-libs" conanfile.py
+
       - name: Bootstrap Conan
-        working-directory: .
-        run: python ./scripts/bootstrap_conan_deps_wrapper.py https://github.com/AdguardTeam/NativeLibsCommon.git https://github.com/AdguardTeam/DnsLibs.git b9944bd50d1d94e3462d951871c1d011dd42c168
+        working-directory: TrustTunnelClient
+        run: python ./scripts/bootstrap_conan_deps.py
 
       - name: Inject dobby_bridge into TrustTunnelClient CMakeLists.txt
         working-directory: TrustTunnelClient
@@ -131,9 +139,17 @@ jobs:
           sudo apt-get install -y ninja-build
           pip install conan~=$CONAN_VER
 
+      - name: Patch dns-libs version in conanfile.py
+        working-directory: TrustTunnelClient
+        run: |
+          # Update dns-libs version from 2.8.51 to 2.8.52 (upstream TrustTunnel hasn't updated yet)
+          sed -i 's/dns-libs\/2.8.51@/dns-libs\/2.8.52@/' conanfile.py
+          echo "Patched conanfile.py to use dns-libs 2.8.52"
+          grep "dns-libs" conanfile.py
+
       - name: Bootstrap Conan
-        working-directory: .
-        run: python ./scripts/bootstrap_conan_deps_wrapper.py https://github.com/AdguardTeam/NativeLibsCommon.git https://github.com/AdguardTeam/DnsLibs.git b9944bd50d1d94e3462d951871c1d011dd42c168
+        working-directory: TrustTunnelClient
+        run: python ./scripts/bootstrap_conan_deps.py
 
       - name: Inject dobby_bridge into TrustTunnelClient CMakeLists.txt
         working-directory: TrustTunnelClient

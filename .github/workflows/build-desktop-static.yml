@@ -37,9 +37,17 @@ jobs:
           pip install conan~=$CONAN_VER
           echo "/opt/homebrew/opt/llvm@21/bin" >> $GITHUB_PATH
 
+      - name: Patch dns-libs version in conanfile.py
+        working-directory: TrustTunnelClient
+        run: |
+          # Update dns-libs version from 2.8.51 to 2.8.52 (upstream TrustTunnel hasn't updated yet)
+          sed -i '' 's/dns-libs\/2.8.51@/dns-libs\/2.8.52@/' conanfile.py
+          echo "Patched conanfile.py to use dns-libs 2.8.52"
+          grep "dns-libs" conanfile.py
+
       - name: Bootstrap Conan
-        working-directory: .
-        run: python ./scripts/bootstrap_conan_deps_wrapper.py https://github.com/AdguardTeam/NativeLibsCommon.git https://github.com/AdguardTeam/DnsLibs.git b9944bd50d1d94e3462d951871c1d011dd42c168
+        working-directory: TrustTunnelClient
+        run: python ./scripts/bootstrap_conan_deps.py
 
       - name: Inject dobby_bridge into TrustTunnelClient CMakeLists.txt
         working-directory: TrustTunnelClient
@@ -66,6 +74,9 @@ jobs:
         run: |
           echo "Finding all required static libraries..."
           
+          # Save the build directory
+          BUILD_DIR="$(pwd)"
+          
           # Create temporary directory for extraction
           TEMP_DIR=$(mktemp -d)
           EXTRACT_DIR="$TEMP_DIR/extracted"
@@ -75,48 +86,58 @@ jobs:
           echo "   Extracting dobby_bridge..."
           mkdir -p "$EXTRACT_DIR/dobby_bridge"
           cd "$EXTRACT_DIR/dobby_bridge"
-          ar x "$OLDPWD/dobby_bridge/libdobby_bridge.a"
+          ar x "$BUILD_DIR/dobby_bridge/libdobby_bridge.a" || echo "Warning: Some members couldn't be extracted"
           
           # Find and extract TrustTunnel core libraries
-          cd "$OLDPWD"
+          cd "$BUILD_DIR"
           VPNLIBS=$(find . -name "libvpnlibs_*.a" 2>/dev/null || true)
           
           for lib in $VPNLIBS; do
+            lib_abs="$BUILD_DIR/$lib"
             libname=$(basename "$lib" .a)
             echo "   Extracting $libname..."
             mkdir -p "$EXTRACT_DIR/$libname"
             cd "$EXTRACT_DIR/$libname"
-            ar x "$OLDPWD/$lib"
+            # Use ar t to check if it's a valid archive first
+            if ar t "$lib_abs" >/dev/null 2>&1; then
+              ar x "$lib_abs" 2>/dev/null || echo "Warning: Partial extraction for $libname"
+            fi
           done
           
           # Extract Conan dependencies (OpenSSL, libevent, etc.)
-          cd "$OLDPWD"
+          cd "$BUILD_DIR"
           CONAN_LIBS=$(find . -path "*/lib/*.a" -name "*.a" 2>/dev/null | grep -E "(ssl|crypto|event|fmt|magic_enum|toml)" || true)
           
           for lib in $CONAN_LIBS; do
+            lib_abs="$BUILD_DIR/$lib"
             libname=$(basename "$lib" .a | sed 's/^lib//')
             echo "   Extracting $libname..."
             mkdir -p "$EXTRACT_DIR/$libname"
             cd "$EXTRACT_DIR/$libname"
-            ar x "$lib" 2>/dev/null || true
+            if ar t "$lib_abs" >/dev/null 2>&1; then
+              ar x "$lib_abs" 2>/dev/null || echo "Warning: Partial extraction for $libname"
+            fi
           done
           
           # Create combined static library
           echo "Creating bundled static library..."
           cd "$EXTRACT_DIR"
           
-          # Find all object files
-          OBJ_FILES=$(find . -name "*.o")
+          # Find all object files (only .o files, no archives)
+          OBJ_FILES=$(find . -type f -name "*.o")
           
           if [ -z "$OBJ_FILES" ]; then
             echo "No object files found!"
             exit 1
           fi
           
-          # Create the combined archive
-          ar rcs "$OLDPWD/dobby_bridge/libdobby_bridge.a" $OBJ_FILES
+          echo "Found $(echo $OBJ_FILES | wc -w) object files"
+          
+          # Create the combined archive using absolute paths to avoid issues
+          ar rcs "$BUILD_DIR/dobby_bridge/libdobby_bridge.a" $OBJ_FILES
           
           # Cleanup
+          cd /
           rm -rf "$TEMP_DIR"
           
           echo "Bundled library created"
@@ -159,9 +180,17 @@ jobs:
           sudo apt install -y libc++-${LLVM_MAJOR_VER}-dev libclang-rt-${LLVM_MAJOR_VER}-dev libc++abi-${LLVM_MAJOR_VER}-dev
           echo "/usr/lib/llvm-$LLVM_MAJOR_VER/bin" >> $GITHUB_PATH
 
+      - name: Patch dns-libs version in conanfile.py
+        working-directory: TrustTunnelClient
+        run: |
+          # Update dns-libs version from 2.8.51 to 2.8.52 (upstream TrustTunnel hasn't updated yet)
+          sed -i 's/dns-libs\/2.8.51@/dns-libs\/2.8.52@/' conanfile.py
+          echo "Patched conanfile.py to use dns-libs 2.8.52"
+          grep "dns-libs" conanfile.py
+
       - name: Bootstrap Conan
-        working-directory: .
-        run: python ./scripts/bootstrap_conan_deps_wrapper.py https://github.com/AdguardTeam/NativeLibsCommon.git https://github.com/AdguardTeam/DnsLibs.git b9944bd50d1d94e3462d951871c1d011dd42c168
+        working-directory: TrustTunnelClient
+        run: python ./scripts/bootstrap_conan_deps.py
 
       - name: Inject dobby_bridge into TrustTunnelClient CMakeLists.txt
         working-directory: TrustTunnelClient
@@ -188,6 +217,9 @@ jobs:
         run: |
           echo "Finding all required static libraries..."
           
+          # Save the build directory
+          BUILD_DIR="$(pwd)"
+          
           # Create temporary directory for extraction
           TEMP_DIR=$(mktemp -d)
           EXTRACT_DIR="$TEMP_DIR/extracted"
@@ -197,48 +229,58 @@ jobs:
           echo "   Extracting dobby_bridge..."
           mkdir -p "$EXTRACT_DIR/dobby_bridge"
           cd "$EXTRACT_DIR/dobby_bridge"
-          ar x "$OLDPWD/dobby_bridge/libdobby_bridge.a"
+          ar x "$BUILD_DIR/dobby_bridge/libdobby_bridge.a" || echo "Warning: Some members couldn't be extracted"
           
           # Find and extract TrustTunnel core libraries
-          cd "$OLDPWD"
+          cd "$BUILD_DIR"
           VPNLIBS=$(find . -name "libvpnlibs_*.a" 2>/dev/null || true)
           
           for lib in $VPNLIBS; do
+            lib_abs="$BUILD_DIR/$lib"
             libname=$(basename "$lib" .a)
             echo "   Extracting $libname..."
             mkdir -p "$EXTRACT_DIR/$libname"
             cd "$EXTRACT_DIR/$libname"
-            ar x "$OLDPWD/$lib"
+            # Use ar t to check if it's a valid archive first
+            if ar t "$lib_abs" >/dev/null 2>&1; then
+              ar x "$lib_abs" 2>/dev/null || echo "Warning: Partial extraction for $libname"
+            fi
           done
           
           # Extract Conan dependencies (OpenSSL, libevent, etc.)
-          cd "$OLDPWD"
+          cd "$BUILD_DIR"
           CONAN_LIBS=$(find . -path "*/lib/*.a" -name "*.a" 2>/dev/null | grep -E "(ssl|crypto|event|fmt|magic_enum|toml)" || true)
           
           for lib in $CONAN_LIBS; do
+            lib_abs="$BUILD_DIR/$lib"
             libname=$(basename "$lib" .a | sed 's/^lib//')
             echo "   Extracting $libname..."
             mkdir -p "$EXTRACT_DIR/$libname"
             cd "$EXTRACT_DIR/$libname"
-            ar x "$lib" 2>/dev/null || true
+            if ar t "$lib_abs" >/dev/null 2>&1; then
+              ar x "$lib_abs" 2>/dev/null || echo "Warning: Partial extraction for $libname"
+            fi
           done
           
           # Create combined static library
           echo "Creating bundled static library..."
           cd "$EXTRACT_DIR"
           
-          # Find all object files
-          OBJ_FILES=$(find . -name "*.o")
+          # Find all object files (only .o files, no archives)
+          OBJ_FILES=$(find . -type f -name "*.o")
           
           if [ -z "$OBJ_FILES" ]; then
             echo "No object files found!"
             exit 1
           fi
           
-          # Create the combined archive
-          ar rcs "$OLDPWD/dobby_bridge/libdobby_bridge.a" $OBJ_FILES
+          echo "Found $(echo $OBJ_FILES | wc -w) object files"
+          
+          # Create the combined archive using absolute paths to avoid issues
+          ar rcs "$BUILD_DIR/dobby_bridge/libdobby_bridge.a" $OBJ_FILES
           
           # Cleanup
+          cd /
           rm -rf "$TEMP_DIR"
           
           echo "Bundled library created"
@@ -282,9 +324,19 @@ jobs:
           choco install strawberryperl nasm
           pip install conan~=${{ env.CONAN_VER }} ninja
 
+      - name: Patch dns-libs version in conanfile.py
+        working-directory: TrustTunnelClient
+        run: |
+          # Update dns-libs version from 2.8.51 to 2.8.52 (upstream TrustTunnel hasn't updated yet)
+          (Get-Content conanfile.py) -replace 'dns-libs/2.8.51@', 'dns-libs/2.8.52@' | Set-Content conanfile.py
+          Write-Host "Patched conanfile.py to use dns-libs 2.8.52"
+          Select-String -Path conanfile.py -Pattern "dns-libs"
+
       - name: Bootstrap Conan
-        working-directory: .
-        run: python ./scripts/bootstrap_conan_deps_wrapper.py https://github.com/AdguardTeam/NativeLibsCommon.git https://github.com/AdguardTeam/DnsLibs.git b9944bd50d1d94e3462d951871c1d011dd42c168
+        working-directory: TrustTunnelClient
+        run: |
+          python ./scripts/bootstrap_conan_deps.py
+
       - name: Inject dobby_bridge into TrustTunnelClient CMakeLists.txt
         working-directory: TrustTunnelClient
         run: |
@@ -292,38 +344,40 @@ jobs:
 
       - name: Configure and Build Static Library (MSVC)
         working-directory: TrustTunnelClient
-        shell: cmd
         run: |
-          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
-          mkdir build
-          cd build
-          cmake -DCMAKE_BUILD_TYPE=Release ^
-            -DCMAKE_C_COMPILER="cl.exe" ^
-            -DCMAKE_CXX_COMPILER="cl.exe" ^
-            -DCMAKE_POSITION_INDEPENDENT_CODE=ON ^
-            -DBUILD_STATIC_LIBS=ON ^
-            -G "Ninja" ..
+          mkdir build && cd build
+          cmake -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_C_COMPILER="cl.exe" `
+            -DCMAKE_CXX_COMPILER="cl.exe" `
+            -DCMAKE_POSITION_INDEPENDENT_CODE=ON `
+            -DBUILD_STATIC_LIBS=ON `
+            -G "Ninja" `
+            ..
           cmake --build . --target dobby_bridge
 
       - name: Bundle All Dependencies into Single Archive (Windows)
         working-directory: TrustTunnelClient/build
-        shell: cmd
         run: |
-          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
-          echo Finding all required static libraries...
+          Write-Host "Finding all required static libraries..."
           
-          REM Find all .lib files
-          set LIBS=
-          for /r %%f in (*.lib) do (
-            echo Found: %%f
-            set LIBS=!LIBS! "%%f"
-          )
+          # Create a response file to avoid command line length limits
+          $responseFile = "libs_list.txt"
+          if (Test-Path $responseFile) { Remove-Item $responseFile }
           
-          REM Combine all libraries
-          echo Creating bundled library...
-          lib.exe /OUT:dobby_bridge\dobby_bridge.lib %LIBS%
+          # Find all .lib files and write to response file
+          Get-ChildItem -Recurse -Filter "*.lib" | ForEach-Object {
+            Write-Host "Found: $($_.FullName)"
+            Add-Content -Path $responseFile -Value "`"$($_.FullName)`""
+          }
           
-          echo Bundled library created
+          # Combine all libraries using response file
+          Write-Host "Creating bundled library..."
+          lib.exe /OUT:dobby_bridge\dobby_bridge.lib "@$responseFile"
+          
+          # Cleanup response file
+          Remove-Item $responseFile
+          
+          Write-Host "Bundled library created"
 
       - name: Verify Bundled Static Library
         working-directory: TrustTunnelClient/build/dobby_bridge
