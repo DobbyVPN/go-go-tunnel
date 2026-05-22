@@ -15,13 +15,15 @@ package manager
 // We only need to link system libraries and frameworks that aren't included.
 
 // macOS: Link bundled static library with required system frameworks
-#cgo darwin LDFLAGS: -L${SRCDIR}/../lib/macos -ldobby_bridge -framework CoreFoundation -framework Security -framework Network -lc++ -lresolv
+#cgo darwin LDFLAGS: -L${SRCDIR}/../lib/macos -ldobby_bridge -framework CoreFoundation -framework Security -framework Network -framework SystemConfiguration -lc++ -lresolv -lz
 
 // Linux: Link bundled static library with required system libraries
-#cgo linux LDFLAGS: -L${SRCDIR}/../lib/linux -ldobby_bridge -lpthread -ldl -lc++ -lc++abi -lm -lresolv
+#cgo linux LDFLAGS: -L${SRCDIR}/../lib/linux -ldobby_bridge -lpthread -ldl -lc++ -lc++abi -lm -lresolv -lz
 
-// Windows: Link bundled static library with required system libraries
-#cgo windows LDFLAGS: -L${SRCDIR}/../lib/windows -ldobby_bridge -lws2_32 -liphlpapi -lcrypt32 -lbcrypt
+// Windows: Link bundled static library with MSVC runtime and system libraries
+// Note: The static library is built with MSVC, so we need to link against the MSVC runtime
+#cgo windows,amd64 LDFLAGS: -L${SRCDIR}/../lib/windows -ldobby_bridge -lws2_32 -liphlpapi -lcrypt32 -lbcrypt -ladvapi32 -lkernel32 -luser32 -Wl,--allow-multiple-definition
+#cgo windows,386 LDFLAGS: -L${SRCDIR}/../lib/windows -ldobby_bridge -lws2_32 -liphlpapi -lcrypt32 -lbcrypt -ladvapi32 -lkernel32 -luser32 -Wl,--allow-multiple-definition
 
 // iOS: Link static library explicitly (Apple strongly prefers static linking)
 #cgo ios,arm64 LDFLAGS: ${SRCDIR}/../lib/ios/libdobby_bridge.a -framework Foundation -framework NetworkExtension -framework Network -lc++ -lresolv

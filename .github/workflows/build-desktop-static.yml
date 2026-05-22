@@ -72,7 +72,7 @@ jobs:
         working-directory: TrustTunnelClient/build
         shell: bash
         run: |
-          echo "Finding all required static libraries..."
+          echo "=== Finding all required static libraries ==="
           
           # Save the build directory
           BUILD_DIR="$(pwd)"
@@ -82,13 +82,21 @@ jobs:
           EXTRACT_DIR="$TEMP_DIR/extracted"
           mkdir -p "$EXTRACT_DIR"
           
+          echo "Build directory: $BUILD_DIR"
+          echo "Extract directory: $EXTRACT_DIR"
+          echo ""
+          
           # Extract dobby_bridge
-          echo "   Extracting dobby_bridge..."
+          echo "1. Extracting dobby_bridge..."
           mkdir -p "$EXTRACT_DIR/dobby_bridge"
           cd "$EXTRACT_DIR/dobby_bridge"
-          ar x "$BUILD_DIR/dobby_bridge/libdobby_bridge.a" || echo "Warning: Some members couldn't be extracted"
+          ar x "$BUILD_DIR/dobby_bridge/libdobby_bridge.a" 2>&1 || echo "Warning: Some members couldn't be extracted"
+          OBJ_COUNT=$(find . -name "*.o" | wc -l)
+          echo "   -> $OBJ_COUNT object files"
           
           # Find and extract TrustTunnel core libraries
+          echo ""
+          echo "2. Extracting vpnlibs..."
           cd "$BUILD_DIR"
           VPNLIBS=$(find . -name "libvpnlibs_*.a" 2>/dev/null || true)
           
@@ -98,49 +106,70 @@ jobs:
             echo "   Extracting $libname..."
             mkdir -p "$EXTRACT_DIR/$libname"
             cd "$EXTRACT_DIR/$libname"
-            # Use ar t to check if it's a valid archive first
             if ar t "$lib_abs" >/dev/null 2>&1; then
-              ar x "$lib_abs" 2>/dev/null || echo "Warning: Partial extraction for $libname"
+              ar x "$lib_abs" 2>/dev/null || echo "   Warning: Partial extraction for $libname"
+              OBJ_COUNT=$(find . -name "*.o" | wc -l)
+              echo "   -> $OBJ_COUNT object files"
             fi
           done
           
-          # Extract Conan dependencies (OpenSSL, libevent, etc.)
+          # Extract ALL .a files from build directory and Conan packages
+          echo ""
+          echo "3. Searching for Conan dependencies..."
           cd "$BUILD_DIR"
-          CONAN_LIBS=$(find . -path "*/lib/*.a" -name "*.a" 2>/dev/null | grep -E "(ssl|crypto|event|fmt|magic_enum|toml)" || true)
           
-          for lib in $CONAN_LIBS; do
+          # Find ALL .a files, excluding the ones we already processed
+          ALL_LIBS=$(find . -type f -name "*.a" 2>/dev/null | \
+            grep -v "libdobby_bridge.a" | \
+            grep -v "libvpnlibs_" || true)
+          
+          echo "   Found $(echo $ALL_LIBS | wc -w) additional libraries"
+          
+          for lib in $ALL_LIBS; do
             lib_abs="$BUILD_DIR/$lib"
             libname=$(basename "$lib" .a | sed 's/^lib//')
-            echo "   Extracting $libname..."
+            
+            # Extract all libraries (they're already filtered by CMake/Conan)
+            echo "   Extracting $libname from $lib..."
             mkdir -p "$EXTRACT_DIR/$libname"
             cd "$EXTRACT_DIR/$libname"
             if ar t "$lib_abs" >/dev/null 2>&1; then
-              ar x "$lib_abs" 2>/dev/null || echo "Warning: Partial extraction for $libname"
+              ar x "$lib_abs" 2>/dev/null || echo "   Warning: Partial extraction for $libname"
+              OBJ_COUNT=$(find . -name "*.o" | wc -l)
+              if [ $OBJ_COUNT -gt 0 ]; then
+                echo "   -> $OBJ_COUNT object files"
+              fi
             fi
           done
           
           # Create combined static library
-          echo "Creating bundled static library..."
+          echo ""
+          echo "=== Creating bundled static library ==="
           cd "$EXTRACT_DIR"
           
           # Find all object files (only .o files, no archives)
           OBJ_FILES=$(find . -type f -name "*.o")
           
           if [ -z "$OBJ_FILES" ]; then
-            echo "No object files found!"
+            echo "ERROR: No object files found!"
+            echo "Contents of EXTRACT_DIR:"
+            ls -la
             exit 1
           fi
           
-          echo "Found $(echo $OBJ_FILES | wc -w) object files"
+          TOTAL_COUNT=$(echo $OBJ_FILES | wc -w)
+          echo "Total object files found: $TOTAL_COUNT"
           
-          # Create the combined archive using absolute paths to avoid issues
+          # Create the combined archive
           ar rcs "$BUILD_DIR/dobby_bridge/libdobby_bridge.a" $OBJ_FILES
           
           # Cleanup
           cd /
           rm -rf "$TEMP_DIR"
           
-          echo "Bundled library created"
+          echo ""
+          echo "=== Bundled library created successfully ==="
+          ls -lh "$BUILD_DIR/dobby_bridge/libdobby_bridge.a"
 
       - name: Verify Bundled Static Library
         working-directory: TrustTunnelClient/build/dobby_bridge
@@ -215,7 +244,7 @@ jobs:
         working-directory: TrustTunnelClient/build
         shell: bash
         run: |
-          echo "Finding all required static libraries..."
+          echo "=== Finding all required static libraries ==="
           
           # Save the build directory
           BUILD_DIR="$(pwd)"
@@ -225,13 +254,21 @@ jobs:
           EXTRACT_DIR="$TEMP_DIR/extracted"
           mkdir -p "$EXTRACT_DIR"
           
+          echo "Build directory: $BUILD_DIR"
+          echo "Extract directory: $EXTRACT_DIR"
+          echo ""
+          
           # Extract dobby_bridge
-          echo "   Extracting dobby_bridge..."
+          echo "1. Extracting dobby_bridge..."
           mkdir -p "$EXTRACT_DIR/dobby_bridge"
           cd "$EXTRACT_DIR/dobby_bridge"
-          ar x "$BUILD_DIR/dobby_bridge/libdobby_bridge.a" || echo "Warning: Some members couldn't be extracted"
+          ar x "$BUILD_DIR/dobby_bridge/libdobby_bridge.a" 2>&1 || echo "Warning: Some members couldn't be extracted"
+          OBJ_COUNT=$(find . -name "*.o" | wc -l)
+          echo "   -> $OBJ_COUNT object files"
           
           # Find and extract TrustTunnel core libraries
+          echo ""
+          echo "2. Extracting vpnlibs..."
           cd "$BUILD_DIR"
           VPNLIBS=$(find . -name "libvpnlibs_*.a" 2>/dev/null || true)
           
@@ -241,49 +278,70 @@ jobs:
             echo "   Extracting $libname..."
             mkdir -p "$EXTRACT_DIR/$libname"
             cd "$EXTRACT_DIR/$libname"
-            # Use ar t to check if it's a valid archive first
             if ar t "$lib_abs" >/dev/null 2>&1; then
-              ar x "$lib_abs" 2>/dev/null || echo "Warning: Partial extraction for $libname"
+              ar x "$lib_abs" 2>/dev/null || echo "   Warning: Partial extraction for $libname"
+              OBJ_COUNT=$(find . -name "*.o" | wc -l)
+              echo "   -> $OBJ_COUNT object files"
             fi
           done
           
-          # Extract Conan dependencies (OpenSSL, libevent, etc.)
+          # Extract ALL .a files from build directory and Conan packages
+          echo ""
+          echo "3. Searching for Conan dependencies..."
           cd "$BUILD_DIR"
-          CONAN_LIBS=$(find . -path "*/lib/*.a" -name "*.a" 2>/dev/null | grep -E "(ssl|crypto|event|fmt|magic_enum|toml)" || true)
           
-          for lib in $CONAN_LIBS; do
+          # Find ALL .a files, excluding the ones we already processed
+          ALL_LIBS=$(find . -type f -name "*.a" 2>/dev/null | \
+            grep -v "libdobby_bridge.a" | \
+            grep -v "libvpnlibs_" || true)
+          
+          echo "   Found $(echo $ALL_LIBS | wc -w) additional libraries"
+          
+          for lib in $ALL_LIBS; do
             lib_abs="$BUILD_DIR/$lib"
             libname=$(basename "$lib" .a | sed 's/^lib//')
-            echo "   Extracting $libname..."
+            
+            # Extract all libraries (they're already filtered by CMake/Conan)
+            echo "   Extracting $libname from $lib..."
             mkdir -p "$EXTRACT_DIR/$libname"
             cd "$EXTRACT_DIR/$libname"
             if ar t "$lib_abs" >/dev/null 2>&1; then
-              ar x "$lib_abs" 2>/dev/null || echo "Warning: Partial extraction for $libname"
+              ar x "$lib_abs" 2>/dev/null || echo "   Warning: Partial extraction for $libname"
+              OBJ_COUNT=$(find . -name "*.o" | wc -l)
+              if [ $OBJ_COUNT -gt 0 ]; then
+                echo "   -> $OBJ_COUNT object files"
+              fi
             fi
           done
           
           # Create combined static library
-          echo "Creating bundled static library..."
+          echo ""
+          echo "=== Creating bundled static library ==="
           cd "$EXTRACT_DIR"
           
           # Find all object files (only .o files, no archives)
           OBJ_FILES=$(find . -type f -name "*.o")
           
           if [ -z "$OBJ_FILES" ]; then
-            echo "No object files found!"
+            echo "ERROR: No object files found!"
+            echo "Contents of EXTRACT_DIR:"
+            ls -la
             exit 1
           fi
           
-          echo "Found $(echo $OBJ_FILES | wc -w) object files"
+          TOTAL_COUNT=$(echo $OBJ_FILES | wc -w)
+          echo "Total object files found: $TOTAL_COUNT"
           
-          # Create the combined archive using absolute paths to avoid issues
+          # Create the combined archive
           ar rcs "$BUILD_DIR/dobby_bridge/libdobby_bridge.a" $OBJ_FILES
           
           # Cleanup
           cd /
           rm -rf "$TEMP_DIR"
           
-          echo "Bundled library created"
+          echo ""
+          echo "=== Bundled library created successfully ==="
+          ls -lh "$BUILD_DIR/dobby_bridge/libdobby_bridge.a"
 
       - name: Verify Bundled Static Library
         working-directory: TrustTunnelClient/build/dobby_bridge
@@ -358,26 +416,47 @@ jobs:
       - name: Bundle All Dependencies into Single Archive (Windows)
         working-directory: TrustTunnelClient/build
         run: |
-          Write-Host "Finding all required static libraries..."
+          Write-Host "=== Finding all required static libraries ==="
           
           # Create a response file to avoid command line length limits
           $responseFile = "libs_list.txt"
           if (Test-Path $responseFile) { Remove-Item $responseFile }
           
-          # Find all .lib files and write to response file
-          Get-ChildItem -Recurse -Filter "*.lib" | ForEach-Object {
-            Write-Host "Found: $($_.FullName)"
+          Write-Host ""
+          Write-Host "Searching for all .lib files..."
+          
+          # Find all .lib files, excluding system libraries
+          $libCount = 0
+          Get-ChildItem -Recurse -Filter "*.lib" | Where-Object {
+            $_.Name -notmatch "^(ucrt|vcruntime|msvcrt|libcmt|oldnames)" -and
+            $_.DirectoryName -notmatch "Windows\\Kits" -and
+            $_.DirectoryName -notmatch "Microsoft Visual Studio"
+          } | ForEach-Object {
+            Write-Host "   Found: $($_.Name) in $($_.DirectoryName)"
             Add-Content -Path $responseFile -Value "`"$($_.FullName)`""
+            $libCount++
+          }
+          
+          Write-Host ""
+          Write-Host "Total libraries found: $libCount"
+          
+          # Check if we found any libraries
+          if (-not (Test-Path $responseFile) -or (Get-Content $responseFile).Length -eq 0) {
+            Write-Host "ERROR: No libraries found!"
+            exit 1
           }
           
           # Combine all libraries using response file
-          Write-Host "Creating bundled library..."
-          lib.exe /OUT:dobby_bridge\dobby_bridge.lib "@$responseFile"
+          Write-Host ""
+          Write-Host "=== Creating bundled library ==="
+          lib.exe /OUT:dobby_bridge\dobby_bridge.lib /VERBOSE "@$responseFile"
           
           # Cleanup response file
           Remove-Item $responseFile
           
-          Write-Host "Bundled library created"
+          Write-Host ""
+          Write-Host "=== Bundled library created successfully ==="
+          dir dobby_bridge\dobby_bridge.lib
 
       - name: Verify Bundled Static Library
         working-directory: TrustTunnelClient/build/dobby_bridge
