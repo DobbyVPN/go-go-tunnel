@@ -155,8 +155,8 @@ jobs:
           echo "4. Searching for libraries in Conan cache..."
           if [ -d "$CONAN_CACHE" ]; then
             CONAN_LIBS=$(find "$CONAN_CACHE" -name "*.a" 2>/dev/null | \
-              grep -E "(quiche|nghttp2|ngtcp2|ssl|crypto|event)" || true)
-            
+              grep -E -i "(quiche|nghttp2|ngtcp2|ssl|crypto|event|ldns|uv|pcre|z|brotli|fmt)" || true)
+
             CONAN_COUNT=$(echo "$CONAN_LIBS" | grep -c "\.a$" || echo 0)
             echo "   Found $CONAN_COUNT relevant libraries in Conan cache"
             
@@ -369,7 +369,7 @@ jobs:
           echo "4. Searching for libraries in Conan cache..."
           if [ -d "$CONAN_CACHE" ]; then
             CONAN_LIBS=$(find "$CONAN_CACHE" -name "*.a" 2>/dev/null | \
-              grep -E "(quiche|nghttp2|ngtcp2|ssl|crypto|event)" || true)
+              grep -E -i "(quiche|nghttp2|ngtcp2|ssl|crypto|event|ldns|uv|pcre|z|brotli|fmt)" || true)
             
             CONAN_COUNT=$(echo "$CONAN_LIBS" | grep -c "\.a$" || echo 0)
             echo "   Found $CONAN_COUNT relevant libraries in Conan cache"

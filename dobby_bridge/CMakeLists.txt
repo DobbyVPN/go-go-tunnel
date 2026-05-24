@@ -3,6 +3,11 @@
 # Option to build static or shared library
 option(BUILD_STATIC_LIBS "Build static library instead of shared" OFF)
 
+# Disable security cookies for MSVC to maintain compatibility with Cgo/MinGW
+if(WIN32 AND MSVC)
+    add_compile_options(/GS-)
+endif()
+
 # Platform-specific source file selection
 if(WIN32)
     set(DOBBY_BRIDGE_SOURCE dobby_bridge_windows.cpp)
