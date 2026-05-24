@@ -278,9 +278,23 @@ jobs:
           echo "Patched conanfile.py to use dns-libs 2.8.52"
           grep "dns-libs" conanfile.py
 
-      - name: Bootstrap Conan
+      - name: Bootstrap Conan (with Clang/libc++ Profile)
         working-directory: TrustTunnelClient
-        run: python ./scripts/bootstrap_conan_deps.py
+        env:
+          CC: clang
+          CXX: clang++
+        run: |
+          # Generate default profile
+          conan profile detect --force
+          
+          # Force Conan to use LLVM's libc++ instead of GNU's libstdc++
+          sed -i 's/compiler.libcxx=libstdc++11/compiler.libcxx=libc++/g' ~/.conan2/profiles/default
+          sed -i 's/compiler.libcxx=libstdc++/compiler.libcxx=libc++/g' ~/.conan2/profiles/default
+          
+          echo "=== Conan Profile ==="
+          cat ~/.conan2/profiles/default
+          
+          python ./scripts/bootstrap_conan_deps.py
 
       - name: Inject dobby_bridge into TrustTunnelClient CMakeLists.txt
         working-directory: TrustTunnelClient
@@ -309,164 +323,62 @@ jobs:
         working-directory: TrustTunnelClient/build
         shell: bash
         run: |
-          echo "=== Finding all required static libraries ==="
-          
-          # Save the build directory
+          echo "=== Creating bundled static library using MRI script ==="
           BUILD_DIR="$(pwd)"
-          
-          # Find Conan cache directory
           CONAN_CACHE="$HOME/.conan2"
+          ARCH=$(uname -m)
           
-          # Create temporary directory for extraction
-          TEMP_DIR=$(mktemp -d)
-          EXTRACT_DIR="$TEMP_DIR/extracted"
-          mkdir -p "$EXTRACT_DIR"
+          # 1. Create the MRI Script
+          MRI_FILE="$BUILD_DIR/merge.mri"
+          echo "create $BUILD_DIR/dobby_bridge/libdobby_bridge_bundled.a" > "$MRI_FILE"
           
-          echo "Build directory: $BUILD_DIR"
-          echo "Conan cache: $CONAN_CACHE"
-          echo "Extract directory: $EXTRACT_DIR"
-          echo ""
+          # Add the main bridge library
+          echo "addlib $BUILD_DIR/dobby_bridge/libdobby_bridge.a" >> "$MRI_FILE"
           
-          # Extract dobby_bridge
-          echo "1. Extracting dobby_bridge..."
-          mkdir -p "$EXTRACT_DIR/dobby_bridge"
-          cd "$EXTRACT_DIR/dobby_bridge"
-          ar x "$BUILD_DIR/dobby_bridge/libdobby_bridge.a" 2>&1 || echo "Warning: Some members couldn't be extracted"
-          OBJ_COUNT=$(find . -name "*.o" | wc -l)
-          echo "   -> $OBJ_COUNT object files"
-          
-          # Find and extract TrustTunnel core libraries
-          echo ""
-          echo "2. Extracting vpnlibs..."
-          cd "$BUILD_DIR"
-          VPNLIBS=$(find . -name "libvpnlibs_*.a" 2>/dev/null || true)
-          
-          for lib in $VPNLIBS; do
-            lib_abs="$BUILD_DIR/$lib"
-            libname=$(basename "$lib" .a)
-            echo "   Extracting $libname..."
-            mkdir -p "$EXTRACT_DIR/$libname"
-            cd "$EXTRACT_DIR/$libname"
-            if ar t "$lib_abs" >/dev/null 2>&1; then
-              ar x "$lib_abs" 2>/dev/null || echo "   Warning: Partial extraction for $libname"
-              OBJ_COUNT=$(find . -name "*.o" | wc -l)
-              echo "   -> $OBJ_COUNT object files"
-            fi
+          # 2. Add VPN Core Libraries
+          for lib in $(find . -name "libvpnlibs_*.a" 2>/dev/null); do
+            echo "addlib $BUILD_DIR/$lib" >> "$MRI_FILE"
           done
           
-          # Extract ALL .a files from build directory
-          echo ""
-          echo "3. Searching for libraries in build directory..."
-          cd "$BUILD_DIR"
-          
-          ALL_LIBS=$(find . -type f -name "*.a" 2>/dev/null | \
-            grep -v "libdobby_bridge.a" | \
-            grep -v "libvpnlibs_" | \
-            grep -v "cmake" || true)
-          
-          LIB_COUNT=$(echo "$ALL_LIBS" | grep -c "\.a$" || echo 0)
-          echo "   Found $LIB_COUNT libraries in build directory"
-          
+          # 3. Add other local build libraries
+          ALL_LIBS=$(find . -type f -name "*.a" 2>/dev/null | grep -v "libdobby_bridge.a" | grep -v "libvpnlibs_" | grep -v "cmake" || true)
           for lib in $ALL_LIBS; do
-            lib_abs="$BUILD_DIR/$lib"
-            libname=$(basename "$lib" .a | sed 's/^lib//')
-            
-            echo "   Extracting $libname from $lib..."
-            mkdir -p "$EXTRACT_DIR/$libname"
-            cd "$EXTRACT_DIR/$libname"
-            if ar t "$lib_abs" >/dev/null 2>&1; then
-              ar x "$lib_abs" 2>/dev/null || echo "   Warning: Partial extraction for $libname"
-              OBJ_COUNT=$(find . -name "*.o" | wc -l)
-              if [ $OBJ_COUNT -gt 0 ]; then
-                echo "   -> $OBJ_COUNT object files"
-              fi
-            fi
+            echo "addlib $BUILD_DIR/$lib" >> "$MRI_FILE"
           done
           
-          # Also search in Conan cache - INCLUDE ALL CRITICAL DEPENDENCIES
+          # 4. Add Conan dependencies
           echo ""
           echo "4. Searching for libraries in Conan cache..."
           if [ -d "$CONAN_CACHE" ]; then
-            # Include ALL .a files from Conan cache
-            # Filter by architecture to avoid mixing different architectures
-            echo "   Detecting build architecture..."
-            ARCH=$(uname -m)
-            echo "   Architecture: $ARCH"
-            
+            # Because this is a fresh CI runner, ALL libraries in the Conan cache 
+            # belong to this build. We don't need a strict architecture filter 
+            # which was accidentally filtering out OpenSSL on Linux.
             CONAN_LIBS=$(find "$CONAN_CACHE" -name "*.a" 2>/dev/null || true)
             
-            CONAN_COUNT=$(echo "$CONAN_LIBS" | grep -c "\.a$" || echo 0)
-            echo "   Found $CONAN_COUNT total libraries in Conan cache"
-            
-            PROCESSED=0
-            SKIPPED=0
-            
             for lib in $CONAN_LIBS; do
-              libname=$(basename "$lib" .a | sed 's/^lib//')
-              
-              # Check if library matches our architecture
-              LIB_ARCH=$(file "$lib" | grep -o "x86-64\|x86_64\|aarch64" | head -1 || echo "unknown")
-              # Normalize architecture names
-              if [ "$LIB_ARCH" = "x86-64" ]; then LIB_ARCH="x86_64"; fi
-              if [ "$LIB_ARCH" = "aarch64" ]; then LIB_ARCH="aarch64"; fi
-              
-              if [ "$LIB_ARCH" = "$ARCH" ] || [ "$LIB_ARCH" = "unknown" ]; then
-                echo "   Extracting $libname ($LIB_ARCH)..."
-                mkdir -p "$EXTRACT_DIR/conan_$libname"
-                cd "$EXTRACT_DIR/conan_$libname"
-                if ar t "$lib" >/dev/null 2>&1; then
-                  ar x "$lib" 2>/dev/null || echo "   Warning: Partial extraction for $libname"
-                  OBJ_COUNT=$(find . -name "*.o" | wc -l)
-                  if [ $OBJ_COUNT -gt 0 ]; then
-                    echo "   -> $OBJ_COUNT object files"
-                    PROCESSED=$((PROCESSED + 1))
-                  fi
-                fi
-              else
-                SKIPPED=$((SKIPPED + 1))
-              fi
+              echo "addlib $lib" >> "$MRI_FILE"
+              echo "   Added to bundle: $(basename "$lib")"
             done
-            
-            echo "   Processed: $PROCESSED libraries"
-            echo "   Skipped: $SKIPPED libraries (wrong architecture)"
           else
             echo "   Conan cache not found at $CONAN_CACHE"
           fi
           
-          # Create combined static library
-          echo ""
-          echo "=== Creating bundled static library ==="
-          cd "$EXTRACT_DIR"
+          # 5. Save and execute the script
+          echo "save" >> "$MRI_FILE"
+          echo "end" >> "$MRI_FILE"
           
-          # Find all object files (only .o files, no archives)
-          OBJ_FILES=$(find . -type f -name "*.o")
+          echo "Executing MRI Script to merge archives securely..."
+          # USE LLVM-AR INSTEAD OF GNU AR
+          llvm-ar -M < "$MRI_FILE"
           
-          if [ -z "$OBJ_FILES" ]; then
-            echo "ERROR: No object files found!"
-            echo "Contents of EXTRACT_DIR:"
-            ls -la
-            exit 1
-          fi
+          # 6. Replace the original archive with the fully bundled one
+          mv "$BUILD_DIR/dobby_bridge/libdobby_bridge_bundled.a" "$BUILD_DIR/dobby_bridge/libdobby_bridge.a"
           
-          TOTAL_COUNT=$(echo $OBJ_FILES | wc -w)
-          echo "Total object files found: $TOTAL_COUNT"
+          # 7. Build the symbol index for the linker using LLVM-RANLIB
+          echo "Building archive symbol index..."
+          llvm-ranlib "$BUILD_DIR/dobby_bridge/libdobby_bridge.a"
           
-          if [ $TOTAL_COUNT -lt 500 ]; then
-            echo ""
-            echo "WARNING: Only $TOTAL_COUNT object files found (expected 1000+)"
-            echo "Conan dependencies may be missing!"
-          fi
-          
-          # Create the combined archive
-          ar rcs "$BUILD_DIR/dobby_bridge/libdobby_bridge.a" $OBJ_FILES
-          
-          # Cleanup
-          cd /
-          rm -rf "$TEMP_DIR"
-          
-          echo ""
           echo "=== Bundled library created successfully ==="
-          ls -lh "$BUILD_DIR/dobby_bridge/libdobby_bridge.a"
 
       - name: Verify Bundled Static Library
         working-directory: TrustTunnelClient/build/dobby_bridge
@@ -484,8 +396,7 @@ jobs:
   build-static-windows:
     runs-on: windows-latest
     env:
-      MSVC_VER: 17
-      MSVC_YEAR: 2022
+      CONAN_VER: 2.12
     steps:
       - name: Checkout Code with Submodules
         uses: actions/checkout@v4
@@ -497,104 +408,110 @@ jobs:
         with:
           python-version: '3.13'
 
-      - name: Set up MSVC
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: x64
-
       - name: Install Dependencies
+        # Strawberry Perl includes the MinGW GCC compiler and GNU ar/ranlib
         run: |
           choco install strawberryperl nasm
           pip install conan~=${{ env.CONAN_VER }} ninja
 
+      - name: Neutralize MSVC Bias in CMake
+        working-directory: TrustTunnelClient
+        shell: bash
+        run: |
+          echo "=== Purging hardcoded MSVC profiles ==="
+          # Find any CMake script injecting windows-msvc and delete that specific line entirely
+          find . -type f \( -name "*.cmake" -o -name "CMakeLists.txt" \) -exec sed -i '/windows-msvc/d' {} +
+          echo "MSVC dependencies neutralized."
+
       - name: Patch dns-libs version in conanfile.py
         working-directory: TrustTunnelClient
+        shell: bash
         run: |
-          # Update dns-libs version from 2.8.51 to 2.8.52 (upstream TrustTunnel hasn't updated yet)
-          (Get-Content conanfile.py) -replace 'dns-libs/2.8.51@', 'dns-libs/2.8.52@' | Set-Content conanfile.py
-          Write-Host "Patched conanfile.py to use dns-libs 2.8.52"
-          Select-String -Path conanfile.py -Pattern "dns-libs"
+          sed -i 's/dns-libs\/2.8.51@/dns-libs\/2.8.52@/' conanfile.py
 
-      - name: Bootstrap Conan
+      - name: Bootstrap Conan (MinGW)
         working-directory: TrustTunnelClient
+        shell: bash
+        env:
+          CC: gcc
+          CXX: g++
         run: |
+          conan profile detect --force
+          # Ensure Conan uses GCC instead of defaulting to MSVC on Windows
+          sed -i 's/compiler=msvc/compiler=gcc/g' ~/.conan2/profiles/default
           python ./scripts/bootstrap_conan_deps.py
 
       - name: Inject dobby_bridge into TrustTunnelClient CMakeLists.txt
         working-directory: TrustTunnelClient
+        shell: bash
         run: |
-          Add-Content -Path CMakeLists.txt -Value 'add_subdirectory("../dobby_bridge" "dobby_bridge")'
+          echo 'add_subdirectory("../dobby_bridge" "dobby_bridge")' >> CMakeLists.txt
 
-      - name: Configure and Build Static Library (MSVC)
+      - name: Configure and Build Bridge (MinGW)
         working-directory: TrustTunnelClient
+        shell: bash
         run: |
           mkdir build && cd build
-          cmake -DCMAKE_BUILD_TYPE=Release `
-            -DCMAKE_C_COMPILER="cl.exe" `
-            -DCMAKE_CXX_COMPILER="cl.exe" `
-            -DCMAKE_POSITION_INDEPENDENT_CODE=ON `
-            -DBUILD_STATIC_LIBS=ON `
-            -G "Ninja" `
-            ..
+          cmake -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER="gcc" \
+            -DCMAKE_CXX_COMPILER="g++" \
+            -DBUILD_STATIC_LIBS=ON \
+            -G "Ninja" ..
           cmake --build . --target dobby_bridge
 
-      - name: Bundle All Dependencies into Single Archive (Windows)
+      - name: Bundle All Dependencies using MRI Script (MinGW)
         working-directory: TrustTunnelClient/build
+        shell: bash
         run: |
-          Write-Host "=== Finding all required static libraries ==="
+          echo "=== Creating bundled static library ==="
+          BUILD_DIR="$(pwd)"
+          CONAN_CACHE="$HOME/.conan2"
           
-          # Create a response file to avoid command line length limits
-          $responseFile = "libs_list.txt"
-          if (Test-Path $responseFile) { Remove-Item $responseFile }
+          # 1. Create the MRI Script
+          MRI_FILE="$BUILD_DIR/merge.mri"
+          echo "create $BUILD_DIR/dobby_bridge/libdobby_bridge_bundled.a" > "$MRI_FILE"
+          echo "addlib $BUILD_DIR/dobby_bridge/libdobby_bridge.a" >> "$MRI_FILE"
           
-          Write-Host ""
-          Write-Host "Searching for all .lib files..."
+          # 2. Add VPN Core Libraries
+          for lib in $(find . -name "libvpnlibs_*.a" 2>/dev/null); do
+            echo "addlib $BUILD_DIR/$lib" >> "$MRI_FILE"
+          done
           
-          # Find all .lib files, excluding system libraries
-          $libCount = 0
-          Get-ChildItem -Recurse -Filter "*.lib" | Where-Object {
-            $_.Name -notmatch "^(ucrt|vcruntime|msvcrt|libcmt|oldnames)" -and
-            $_.DirectoryName -notmatch "Windows\\Kits" -and
-            $_.DirectoryName -notmatch "Microsoft Visual Studio"
-          } | ForEach-Object {
-            Write-Host "   Found: $($_.Name) in $($_.DirectoryName)"
-            Add-Content -Path $responseFile -Value "`"$($_.FullName)`""
-            $libCount++
-          }
+          # 3. Add local build libraries
+          ALL_LIBS=$(find . -type f -name "*.a" 2>/dev/null | grep -v "libdobby_bridge.a" | grep -v "libvpnlibs_" | grep -v "cmake" || true)
+          for lib in $ALL_LIBS; do
+            echo "addlib $BUILD_DIR/$lib" >> "$MRI_FILE"
+          done
           
-          Write-Host ""
-          Write-Host "Total libraries found: $libCount"
+          # 4. Add Conan dependencies
+          if [ -d "$CONAN_CACHE" ]; then
+            CONAN_LIBS=$(find "$CONAN_CACHE" -name "*.a" 2>/dev/null || true)
+            for lib in $CONAN_LIBS; do
+              echo "addlib $lib" >> "$MRI_FILE"
+            done
+          fi
           
-          # Check if we found any libraries
-          if (-not (Test-Path $responseFile) -or (Get-Content $responseFile).Length -eq 0) {
-            Write-Host "ERROR: No libraries found!"
-            exit 1
-          }
+          # 5. Save and execute
+          echo "save" >> "$MRI_FILE"
+          echo "end" >> "$MRI_FILE"
           
-          # Combine all libraries using response file
-          Write-Host ""
-          Write-Host "=== Creating bundled library ==="
-          lib.exe /OUT:dobby_bridge\dobby_bridge.lib /VERBOSE "@$responseFile"
+          # Execute standard GNU ar (provided by Strawberry Perl)
+          ar -M < "$MRI_FILE"
           
-          # Cleanup response file
-          Remove-Item $responseFile
+          # 6. Replace the original archive
+          mv "$BUILD_DIR/dobby_bridge/libdobby_bridge_bundled.a" "$BUILD_DIR/dobby_bridge/libdobby_bridge.a"
           
-          Write-Host ""
-          Write-Host "=== Bundled library created successfully ==="
-          dir dobby_bridge\dobby_bridge.lib
+          # 7. Build the symbol index for the linker (crucial for Rust/C++ interop)
+          ranlib "$BUILD_DIR/dobby_bridge/libdobby_bridge.a"
+          
+          echo "=== Bundled library created successfully ==="
+          ls -lh "$BUILD_DIR/dobby_bridge/libdobby_bridge.a"
 
-      - name: Verify Bundled Static Library
-        working-directory: TrustTunnelClient/build/dobby_bridge
-        run: |
-          dir dobby_bridge.lib
-          lib /LIST dobby_bridge.lib > lib_contents.txt
-          powershell -Command "Get-Content lib_contents.txt | Measure-Object -Line | Select-Object -ExpandProperty Lines"
-          
       - name: Upload Windows Static Library
         uses: actions/upload-artifact@v4
         with:
           name: dobby_bridge-windows-static
-          path: TrustTunnelClient/build/dobby_bridge/dobby_bridge.lib
+          path: TrustTunnelClient/build/dobby_bridge/libdobby_bridge.a
 
   commit-libraries:
     needs: [build-static-macos, build-static-linux, build-static-windows]
@@ -636,7 +553,7 @@ jobs:
           echo ""
           echo "=== Windows ==="
           ls -lh lib/windows/
-          file lib/windows/dobby_bridge.lib
+          file lib/windows/libdobby_bridge.a
 
       - name: Configure Git
         run: |
@@ -647,7 +564,7 @@ jobs:
         run: |
           git add lib/macos/libdobby_bridge.a
           git add lib/linux/libdobby_bridge.a
-          git add lib/windows/dobby_bridge.lib
+          git add lib/windows/libdobby_bridge.a
           
           # Check if there are changes to commit
           if git diff --staged --quiet; then
