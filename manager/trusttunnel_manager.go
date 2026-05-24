@@ -3,28 +3,23 @@ package manager
 /*
 #cgo CFLAGS: -I${SRCDIR}
 
-// --- Bundled Static Linking Configuration ---
+// --- Static Linking Configuration ---
 //
-// The libdobby_bridge.a library is a "fat" static library that includes:
-// - dobby_bridge code (our C++ wrapper)
-// - TrustTunnel core libraries (vpnlibs_trusttunnel, vpnlibs_core, vpnlibs_net, vpnlibs_common)
-// - OpenSSL (libssl, libcrypto)
-// - libevent (event, event_core, event_extra, event_openssl, event_pthreads)
-// - Other dependencies (fmt, magic_enum, tomlplusplus, etc.)
-//
-// We only need to link system libraries and frameworks that aren't included.
+// Link against bundled static libraries (.a/.lib) which include all dependencies.
+// This approach provides better portability and eliminates runtime dependency issues.
 
-// macOS: Link bundled static library with required system frameworks
-#cgo darwin LDFLAGS: -L${SRCDIR}/../lib/macos -ldobby_bridge -framework CoreFoundation -framework Security -framework Network -framework SystemConfiguration -lc++ -lresolv -lz
+// macOS: Link bundled static library with all required system frameworks and libraries
+// The static library includes: dobby_bridge, vpnlibs_*, ldns, openssl, libevent, nghttp2, quiche, brotli, etc.
+// Only link system libraries that are always available on macOS
+#cgo darwin LDFLAGS: ${SRCDIR}/../lib/macos/libdobby_bridge.a -framework Foundation -framework CoreFoundation -framework Security -framework Network -framework SystemConfiguration -lc++ -lresolv -lz -liconv
 
-// Linux: Link bundled static library with required system libraries
-#cgo linux LDFLAGS: -L${SRCDIR}/../lib/linux -ldobby_bridge -lpthread -ldl -lc++ -lc++abi -lm -lresolv -lz
+// Linux: Link bundled static library with all required system libraries
+// The static library uses libc++ (LLVM C++ library), so we need to link it
+#cgo linux LDFLAGS: ${SRCDIR}/../lib/linux/libdobby_bridge.a -lc++ -lc++abi -lm -lpthread -ldl -lresolv -lz
 
-// Windows: Link bundled static library with MSVC runtime and system libraries
-// Note: The static library is built with MSVC, so we need to link against the MSVC runtime
-// Windows: Link bundled static library with MSVC runtime and system libraries
-#cgo windows,amd64 LDFLAGS: -L${SRCDIR}/../lib/windows -ldobby_bridge -lws2_32 -liphlpapi -lcrypt32 -lbcrypt -ladvapi32 -lkernel32 -luser32 -lucrt -lvcruntime -lmsvcrt -Wl,--allow-multiple-definition
-#cgo windows,386 LDFLAGS: -L${SRCDIR}/../lib/windows -ldobby_bridge -lws2_32 -liphlpapi -lcrypt32 -lbcrypt -ladvapi32 -lkernel32 -luser32 -lucrt -lvcruntime -lmsvcrt -Wl,--allow-multiple-definition
+// Windows: Link bundled static library with required Windows system libraries
+// Use -L to specify directory and -l for the library name (without .lib extension)
+#cgo windows LDFLAGS: -L${SRCDIR}/../lib/windows -ldobby_bridge -lws2_32 -liphlpapi -lbcrypt -lcrypt32 -lsecur32 -luserenv -lntdll -ladvapi32 -Wl,--allow-multiple-definition
 
 // iOS: Link static library explicitly (Apple strongly prefers static linking)
 #cgo ios,arm64 LDFLAGS: ${SRCDIR}/../lib/ios/libdobby_bridge.a -framework Foundation -framework NetworkExtension -framework Network -lc++ -lresolv

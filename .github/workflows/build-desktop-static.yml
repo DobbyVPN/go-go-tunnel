@@ -150,30 +150,49 @@ jobs:
             fi
           done
           
-          # Also search in Conan cache
+          # Also search in Conan cache - INCLUDE ALL CRITICAL DEPENDENCIES
           echo ""
           echo "4. Searching for libraries in Conan cache..."
           if [ -d "$CONAN_CACHE" ]; then
-            CONAN_LIBS=$(find "$CONAN_CACHE" -name "*.a" 2>/dev/null | \
-              grep -E -i "(quiche|nghttp2|ngtcp2|ssl|crypto|event|ldns|uv|pcre|z|brotli|fmt)" || true)
-
+            # Include ALL .a files from Conan cache
+            # Filter by architecture to avoid mixing x86_64 and ARM64 objects
+            echo "   Detecting build architecture..."
+            ARCH=$(uname -m)
+            echo "   Architecture: $ARCH"
+            
+            CONAN_LIBS=$(find "$CONAN_CACHE" -name "*.a" 2>/dev/null || true)
+            
             CONAN_COUNT=$(echo "$CONAN_LIBS" | grep -c "\.a$" || echo 0)
-            echo "   Found $CONAN_COUNT relevant libraries in Conan cache"
+            echo "   Found $CONAN_COUNT total libraries in Conan cache"
+            
+            PROCESSED=0
+            SKIPPED=0
             
             for lib in $CONAN_LIBS; do
               libname=$(basename "$lib" .a | sed 's/^lib//')
               
-              echo "   Extracting $libname from Conan cache..."
-              mkdir -p "$EXTRACT_DIR/conan_$libname"
-              cd "$EXTRACT_DIR/conan_$libname"
-              if ar t "$lib" >/dev/null 2>&1; then
-                ar x "$lib" 2>/dev/null || echo "   Warning: Partial extraction for $libname"
-                OBJ_COUNT=$(find . -name "*.o" | wc -l)
-                if [ $OBJ_COUNT -gt 0 ]; then
-                  echo "   -> $OBJ_COUNT object files"
+              # Check if library matches our architecture
+              LIB_ARCH=$(lipo -info "$lib" 2>/dev/null | grep -o "arm64\|x86_64" | head -1 || file "$lib" | grep -o "arm64\|x86_64" | head -1 || echo "unknown")
+              
+              if [ "$LIB_ARCH" = "$ARCH" ] || [ "$LIB_ARCH" = "unknown" ]; then
+                echo "   Extracting $libname ($LIB_ARCH)..."
+                mkdir -p "$EXTRACT_DIR/conan_$libname"
+                cd "$EXTRACT_DIR/conan_$libname"
+                if ar t "$lib" >/dev/null 2>&1; then
+                  ar x "$lib" 2>/dev/null || echo "   Warning: Partial extraction for $libname"
+                  OBJ_COUNT=$(find . -name "*.o" | wc -l)
+                  if [ $OBJ_COUNT -gt 0 ]; then
+                    echo "   -> $OBJ_COUNT object files"
+                    PROCESSED=$((PROCESSED + 1))
+                  fi
                 fi
+              else
+                SKIPPED=$((SKIPPED + 1))
               fi
             done
+            
+            echo "   Processed: $PROCESSED libraries"
+            echo "   Skipped: $SKIPPED libraries (wrong architecture)"
           else
             echo "   Conan cache not found at $CONAN_CACHE"
           fi
@@ -364,30 +383,52 @@ jobs:
             fi
           done
           
-          # Also search in Conan cache
+          # Also search in Conan cache - INCLUDE ALL CRITICAL DEPENDENCIES
           echo ""
           echo "4. Searching for libraries in Conan cache..."
           if [ -d "$CONAN_CACHE" ]; then
-            CONAN_LIBS=$(find "$CONAN_CACHE" -name "*.a" 2>/dev/null | \
-              grep -E -i "(quiche|nghttp2|ngtcp2|ssl|crypto|event|ldns|uv|pcre|z|brotli|fmt)" || true)
+            # Include ALL .a files from Conan cache
+            # Filter by architecture to avoid mixing different architectures
+            echo "   Detecting build architecture..."
+            ARCH=$(uname -m)
+            echo "   Architecture: $ARCH"
+            
+            CONAN_LIBS=$(find "$CONAN_CACHE" -name "*.a" 2>/dev/null || true)
             
             CONAN_COUNT=$(echo "$CONAN_LIBS" | grep -c "\.a$" || echo 0)
-            echo "   Found $CONAN_COUNT relevant libraries in Conan cache"
+            echo "   Found $CONAN_COUNT total libraries in Conan cache"
+            
+            PROCESSED=0
+            SKIPPED=0
             
             for lib in $CONAN_LIBS; do
               libname=$(basename "$lib" .a | sed 's/^lib//')
               
-              echo "   Extracting $libname from Conan cache..."
-              mkdir -p "$EXTRACT_DIR/conan_$libname"
-              cd "$EXTRACT_DIR/conan_$libname"
-              if ar t "$lib" >/dev/null 2>&1; then
-                ar x "$lib" 2>/dev/null || echo "   Warning: Partial extraction for $libname"
-                OBJ_COUNT=$(find . -name "*.o" | wc -l)
-                if [ $OBJ_COUNT -gt 0 ]; then
-                  echo "   -> $OBJ_COUNT object files"
+              # Check if library matches our architecture
+              LIB_ARCH=$(file "$lib" | grep -o "x86-64\|x86_64\|aarch64" | head -1 || echo "unknown")
+              # Normalize architecture names
+              if [ "$LIB_ARCH" = "x86-64" ]; then LIB_ARCH="x86_64"; fi
+              if [ "$LIB_ARCH" = "aarch64" ]; then LIB_ARCH="aarch64"; fi
+              
+              if [ "$LIB_ARCH" = "$ARCH" ] || [ "$LIB_ARCH" = "unknown" ]; then
+                echo "   Extracting $libname ($LIB_ARCH)..."
+                mkdir -p "$EXTRACT_DIR/conan_$libname"
+                cd "$EXTRACT_DIR/conan_$libname"
+                if ar t "$lib" >/dev/null 2>&1; then
+                  ar x "$lib" 2>/dev/null || echo "   Warning: Partial extraction for $libname"
+                  OBJ_COUNT=$(find . -name "*.o" | wc -l)
+                  if [ $OBJ_COUNT -gt 0 ]; then
+                    echo "   -> $OBJ_COUNT object files"
+                    PROCESSED=$((PROCESSED + 1))
+                  fi
                 fi
+              else
+                SKIPPED=$((SKIPPED + 1))
               fi
             done
+            
+            echo "   Processed: $PROCESSED libraries"
+            echo "   Skipped: $SKIPPED libraries (wrong architecture)"
           else
             echo "   Conan cache not found at $CONAN_CACHE"
           fi
