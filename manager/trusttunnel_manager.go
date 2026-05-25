@@ -7,20 +7,44 @@ package manager
 //
 // Link against bundled static libraries (.a/.lib) which include all dependencies.
 // This approach provides better portability and eliminates runtime dependency issues.
+//
+// CRITICAL: The static libraries are built with specific C++ toolchains.
+// CGO must use the SAME C++ standard library to avoid ABI incompatibility crashes.
 
 // macOS: Link bundled static library with all required system frameworks and libraries
 // The static library includes: dobby_bridge, vpnlibs_*, ldns, openssl, libevent, nghttp2, quiche, brotli, etc.
+// macOS uses libc++ as the system default, so no special configuration needed
 // Only link system libraries that are always available on macOS
 #cgo darwin LDFLAGS: ${SRCDIR}/../lib/macos/libdobby_bridge.a -framework Foundation -framework CoreFoundation -framework Security -framework Network -framework SystemConfiguration -lc++ -lresolv -lz -liconv
 
-// Linux: Link bundled static library with all required system libraries
-// The static library uses libc++ (LLVM C++ library), so we need to link it
-// Also add -Wl,--whole-archive to ensure all symbols are included
-#cgo linux LDFLAGS: -Wl,--whole-archive ${SRCDIR}/../lib/linux/libdobby_bridge.a -Wl,--no-whole-archive -lc++ -lc++abi -lm -lpthread -ldl -lresolv -lz
+// Linux: CRITICAL ABI COMPATIBILITY CONFIGURATION
+// The static library is built with clang++ and libc++ (LLVM C++ standard library)
+// We MUST force CGO to use the same toolchain to avoid segfaults in C++ STL destructors
+// Using g++/libstdc++ will cause crashes in std::vector, std::string, std::unique_ptr destructors
+//
+// Build Requirements:
+//   - clang/clang++ compiler
+//   - libc++-dev and libc++abi-dev packages
+//
+// Installation (Ubuntu/Debian):
+//   sudo apt install clang libc++-dev libc++abi-dev
+//
+#cgo linux,!android CXX: clang++
+#cgo linux,!android CXXFLAGS: -stdlib=libc++
+#cgo linux,!android LDFLAGS: ${SRCDIR}/../lib/linux/libdobby_bridge.a -lc++ -lc++abi -lm -lpthread -ldl -lresolv -lz
 
-// Windows: Link bundled static library with required Windows system libraries
-// Use -L to specify directory and -l for the library name (without .lib extension)
-#cgo windows LDFLAGS: -L${SRCDIR}/../lib/windows -ldobby_bridge -lws2_32 -liphlpapi -lbcrypt -lcrypt32 -lsecur32 -luserenv -lntdll -ladvapi32 -Wl,--allow-multiple-definition
+// Windows: CRITICAL TOOLCHAIN COMPATIBILITY CONFIGURATION
+// The static library is built with MinGW GCC (from Strawberry Perl)
+// We MUST use the same MinGW toolchain in CGO to avoid linking errors
+// Statically link C++ runtime to avoid DLL dependencies
+//
+// Build Requirements:
+//   - MinGW GCC toolchain (gcc/g++)
+//   - Install via Chocolatey: choco install mingw
+//   - OR use Strawberry Perl: choco install strawberryperl (includes MinGW)
+//
+#cgo windows CXX: g++
+#cgo windows LDFLAGS: ${SRCDIR}/../lib/windows/libdobby_bridge.a -lstdc++ -lws2_32 -liphlpapi -lbcrypt -lcrypt32 -lsecur32 -luserenv -lntdll -ladvapi32 -lwinmm -static-libgcc -static-libstdc++
 
 // iOS: Link static library explicitly (Apple strongly prefers static linking)
 #cgo ios,arm64 LDFLAGS: ${SRCDIR}/../lib/ios/libdobby_bridge.a -framework Foundation -framework NetworkExtension -framework Network -lc++ -lresolv
