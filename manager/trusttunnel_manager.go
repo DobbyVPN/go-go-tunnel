@@ -15,7 +15,8 @@ package manager
 
 // Linux: Link bundled static library with all required system libraries
 // The static library uses libc++ (LLVM C++ library), so we need to link it
-#cgo linux LDFLAGS: ${SRCDIR}/../lib/linux/libdobby_bridge.a -lc++ -lc++abi -lm -lpthread -ldl -lresolv -lz
+// Also add -Wl,--whole-archive to ensure all symbols are included
+#cgo linux LDFLAGS: -Wl,--whole-archive ${SRCDIR}/../lib/linux/libdobby_bridge.a -Wl,--no-whole-archive -lc++ -lc++abi -lm -lpthread -ldl -lresolv -lz
 
 // Windows: Link bundled static library with required Windows system libraries
 // Use -L to specify directory and -l for the library name (without .lib extension)

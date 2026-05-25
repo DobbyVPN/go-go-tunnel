@@ -323,62 +323,169 @@ jobs:
         working-directory: TrustTunnelClient/build
         shell: bash
         run: |
-          echo "=== Creating bundled static library using MRI script ==="
+          echo "=== Creating bundled static library using extraction method ==="
           BUILD_DIR="$(pwd)"
           CONAN_CACHE="$HOME/.conan2"
           ARCH=$(uname -m)
           
-          # 1. Create the MRI Script
-          MRI_FILE="$BUILD_DIR/merge.mri"
-          echo "create $BUILD_DIR/dobby_bridge/libdobby_bridge_bundled.a" > "$MRI_FILE"
+          # Create temporary directory for extraction
+          TEMP_DIR=$(mktemp -d)
+          EXTRACT_DIR="$TEMP_DIR/extracted"
+          mkdir -p "$EXTRACT_DIR"
           
-          # Add the main bridge library
-          echo "addlib $BUILD_DIR/dobby_bridge/libdobby_bridge.a" >> "$MRI_FILE"
+          echo "Build directory: $BUILD_DIR"
+          echo "Conan cache: $CONAN_CACHE"
+          echo "Extract directory: $EXTRACT_DIR"
+          echo "Architecture: $ARCH"
+          echo ""
           
-          # 2. Add VPN Core Libraries
-          for lib in $(find . -name "libvpnlibs_*.a" 2>/dev/null); do
-            echo "addlib $BUILD_DIR/$lib" >> "$MRI_FILE"
+          # 1. Extract dobby_bridge
+          echo "1. Extracting dobby_bridge..."
+          mkdir -p "$EXTRACT_DIR/dobby_bridge"
+          cd "$EXTRACT_DIR/dobby_bridge"
+          ar x "$BUILD_DIR/dobby_bridge/libdobby_bridge.a" 2>&1 || echo "Warning: Some members couldn't be extracted"
+          OBJ_COUNT=$(find . -name "*.o" | wc -l)
+          echo "   -> $OBJ_COUNT object files"
+          
+          # 2. Extract VPN Core Libraries
+          echo ""
+          echo "2. Extracting vpnlibs..."
+          cd "$BUILD_DIR"
+          VPNLIBS=$(find . -name "libvpnlibs_*.a" 2>/dev/null || true)
+          
+          for lib in $VPNLIBS; do
+            lib_abs="$BUILD_DIR/$lib"
+            libname=$(basename "$lib" .a)
+            echo "   Extracting $libname..."
+            mkdir -p "$EXTRACT_DIR/$libname"
+            cd "$EXTRACT_DIR/$libname"
+            if ar t "$lib_abs" >/dev/null 2>&1; then
+              ar x "$lib_abs" 2>/dev/null || echo "   Warning: Partial extraction for $libname"
+              OBJ_COUNT=$(find . -name "*.o" | wc -l)
+              echo "   -> $OBJ_COUNT object files"
+            fi
           done
           
-          # 3. Add other local build libraries
-          ALL_LIBS=$(find . -type f -name "*.a" 2>/dev/null | grep -v "libdobby_bridge.a" | grep -v "libvpnlibs_" | grep -v "cmake" || true)
+          # 3. Extract other local build libraries
+          echo ""
+          echo "3. Searching for libraries in build directory..."
+          cd "$BUILD_DIR"
+          
+          ALL_LIBS=$(find . -type f -name "*.a" 2>/dev/null | \
+            grep -v "libdobby_bridge.a" | \
+            grep -v "libvpnlibs_" | \
+            grep -v "cmake" || true)
+          
+          LIB_COUNT=$(echo "$ALL_LIBS" | grep -c "\.a$" || echo 0)
+          echo "   Found $LIB_COUNT libraries in build directory"
+          
           for lib in $ALL_LIBS; do
-            echo "addlib $BUILD_DIR/$lib" >> "$MRI_FILE"
+            lib_abs="$BUILD_DIR/$lib"
+            libname=$(basename "$lib" .a | sed 's/^lib//')
+            
+            echo "   Extracting $libname from $lib..."
+            mkdir -p "$EXTRACT_DIR/$libname"
+            cd "$EXTRACT_DIR/$libname"
+            if ar t "$lib_abs" >/dev/null 2>&1; then
+              ar x "$lib_abs" 2>/dev/null || echo "   Warning: Partial extraction for $libname"
+              OBJ_COUNT=$(find . -name "*.o" | wc -l)
+              if [ $OBJ_COUNT -gt 0 ]; then
+                echo "   -> $OBJ_COUNT object files"
+              fi
+            fi
           done
           
-          # 4. Add Conan dependencies
+          # 4. Extract Conan dependencies with architecture filtering
           echo ""
           echo "4. Searching for libraries in Conan cache..."
           if [ -d "$CONAN_CACHE" ]; then
-            # Because this is a fresh CI runner, ALL libraries in the Conan cache 
-            # belong to this build. We don't need a strict architecture filter 
-            # which was accidentally filtering out OpenSSL on Linux.
+            # Filter by architecture to avoid mixing x86_64 and ARM64 objects
+            echo "   Filtering by architecture: $ARCH"
+            
             CONAN_LIBS=$(find "$CONAN_CACHE" -name "*.a" 2>/dev/null || true)
             
+            CONAN_COUNT=$(echo "$CONAN_LIBS" | grep -c "\.a$" || echo 0)
+            echo "   Found $CONAN_COUNT total libraries in Conan cache"
+            
+            PROCESSED=0
+            SKIPPED=0
+            
             for lib in $CONAN_LIBS; do
-              echo "addlib $lib" >> "$MRI_FILE"
-              echo "   Added to bundle: $(basename "$lib")"
+              libname=$(basename "$lib" .a | sed 's/^lib//')
+              
+              # Check if library matches our architecture using file command
+              LIB_ARCH=$(file "$lib" 2>/dev/null | grep -o "x86-64\|x86_64\|aarch64\|arm64" | head -1 || echo "unknown")
+              
+              # Normalize architecture names
+              case "$LIB_ARCH" in
+                x86-64|x86_64)
+                  LIB_ARCH="x86_64"
+                  ;;
+                aarch64|arm64)
+                  LIB_ARCH="arm64"
+                  ;;
+                *)
+                  LIB_ARCH="unknown"
+                  ;;
+              esac
+              
+              if [ "$LIB_ARCH" = "$ARCH" ] || [ "$LIB_ARCH" = "unknown" ]; then
+                echo "   Extracting $libname ($LIB_ARCH)..."
+                mkdir -p "$EXTRACT_DIR/conan_$libname"
+                cd "$EXTRACT_DIR/conan_$libname"
+                if ar t "$lib" >/dev/null 2>&1; then
+                  ar x "$lib" 2>/dev/null || echo "   Warning: Partial extraction for $libname"
+                  OBJ_COUNT=$(find . -name "*.o" | wc -l)
+                  if [ $OBJ_COUNT -gt 0 ]; then
+                    echo "   -> $OBJ_COUNT object files"
+                    PROCESSED=$((PROCESSED + 1))
+                  fi
+                fi
+              else
+                SKIPPED=$((SKIPPED + 1))
+              fi
             done
+            
+            echo "   Processed: $PROCESSED libraries"
+            echo "   Skipped: $SKIPPED libraries (wrong architecture)"
           else
             echo "   Conan cache not found at $CONAN_CACHE"
           fi
           
-          # 5. Save and execute the script
-          echo "save" >> "$MRI_FILE"
-          echo "end" >> "$MRI_FILE"
+          # 5. Create combined static library
+          echo ""
+          echo "=== Creating bundled static library ==="
+          cd "$EXTRACT_DIR"
           
-          echo "Executing MRI Script to merge archives securely..."
-          # USE LLVM-AR INSTEAD OF GNU AR
-          llvm-ar -M < "$MRI_FILE"
+          # Find all object files (only .o files, no archives)
+          OBJ_FILES=$(find . -type f -name "*.o")
           
-          # 6. Replace the original archive with the fully bundled one
-          mv "$BUILD_DIR/dobby_bridge/libdobby_bridge_bundled.a" "$BUILD_DIR/dobby_bridge/libdobby_bridge.a"
+          if [ -z "$OBJ_FILES" ]; then
+            echo "ERROR: No object files found!"
+            echo "Contents of EXTRACT_DIR:"
+            ls -la
+            exit 1
+          fi
           
-          # 7. Build the symbol index for the linker using LLVM-RANLIB
-          echo "Building archive symbol index..."
-          llvm-ranlib "$BUILD_DIR/dobby_bridge/libdobby_bridge.a"
+          TOTAL_COUNT=$(echo $OBJ_FILES | wc -w)
+          echo "Total object files found: $TOTAL_COUNT"
           
+          if [ $TOTAL_COUNT -lt 500 ]; then
+            echo ""
+            echo "WARNING: Only $TOTAL_COUNT object files found (expected 1000+)"
+            echo "Conan dependencies may be missing!"
+          fi
+          
+          # Create the combined archive using llvm-ar
+          llvm-ar rcs "$BUILD_DIR/dobby_bridge/libdobby_bridge.a" $OBJ_FILES
+          
+          # Cleanup
+          cd /
+          rm -rf "$TEMP_DIR"
+          
+          echo ""
           echo "=== Bundled library created successfully ==="
+          ls -lh "$BUILD_DIR/dobby_bridge/libdobby_bridge.a"
 
       - name: Verify Bundled Static Library
         working-directory: TrustTunnelClient/build/dobby_bridge
