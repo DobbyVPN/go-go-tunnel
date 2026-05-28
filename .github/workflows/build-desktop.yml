@@ -63,6 +63,7 @@ jobs:
             -DCMAKE_CXX_COMPILER="clang++" \
             -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
             -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+            -DBUILD_STATIC_LIBS=OFF \
             -G "Ninja" ..
           cmake --build . --target dobby_bridge
 
@@ -122,6 +123,7 @@ jobs:
             -DCMAKE_CXX_COMPILER="clang++" \
             -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
             -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+            -DBUILD_STATIC_LIBS=OFF \
             -G "Ninja" ..
           cmake --build . --target dobby_bridge
 
@@ -186,6 +188,7 @@ jobs:
           cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo `
             -DCMAKE_C_COMPILER="cl.exe" `
             -DCMAKE_CXX_COMPILER="cl.exe" `
+            -DBUILD_STATIC_LIBS=OFF `
             -G "Ninja" ..
           cmake --build . --target dobby_bridge
 

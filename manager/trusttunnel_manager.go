@@ -11,56 +11,30 @@ package manager
 // CRITICAL: The static libraries are built with specific C++ toolchains.
 // CGO must use the SAME C++ standard library to avoid ABI incompatibility crashes.
 
-// macOS: Link bundled static library with all required system frameworks and libraries
-// The static library includes: dobby_bridge, vpnlibs_*, ldns, openssl, libevent, nghttp2, quiche, brotli, etc.
-// macOS uses libc++ as the system default, so no special configuration needed
-// Only link system libraries that are always available on macOS
-#cgo darwin LDFLAGS: ${SRCDIR}/../lib/macos/libdobby_bridge.a -framework Foundation -framework CoreFoundation -framework Security -framework Network -framework SystemConfiguration -lc++ -lresolv -lz -liconv
+// macOS: Link dynamic library and set rpath so it can be found at runtime
+#cgo darwin LDFLAGS: -L${SRCDIR}/../lib/macos -ldobby_bridge -Wl,-rpath,@loader_path/../lib/macos -Wl,-rpath,@executable_path/../lib/macos
 
-// Linux: CRITICAL ABI COMPATIBILITY CONFIGURATION
-// The static library is built with clang++ and libc++ (LLVM C++ standard library)
-// We MUST force CGO to use the same toolchain to avoid segfaults in C++ STL destructors
-// Using g++/libstdc++ will cause crashes in std::vector, std::string, std::unique_ptr destructors
-//
-// Build Requirements:
-//   - clang/clang++ compiler
-//   - libc++-dev and libc++abi-dev packages
-//
-// Installation (Ubuntu/Debian):
-//   sudo apt install clang libc++-dev libc++abi-dev
-//
-#cgo linux,!android CXX: clang++
-#cgo linux,!android CXXFLAGS: -stdlib=libc++
-#cgo linux,!android LDFLAGS: ${SRCDIR}/../lib/linux/libdobby_bridge.a -lc++ -lc++abi -lm -lpthread -ldl -lresolv -lz
+// Linux: Link dynamic library and set rpath
+#cgo linux,!android LDFLAGS: -L${SRCDIR}/../lib/linux -ldobby_bridge -Wl,-rpath,$ORIGIN/../lib/linux
 
-// Windows: CRITICAL TOOLCHAIN COMPATIBILITY CONFIGURATION
-// The static library is built with MinGW GCC (from Strawberry Perl)
-// We MUST use the same MinGW toolchain in CGO to avoid linking errors
-// Statically link C++ runtime to avoid DLL dependencies
-//
-// Build Requirements:
-//   - MinGW GCC toolchain (gcc/g++)
-//   - Install via Chocolatey: choco install mingw
-//   - OR use Strawberry Perl: choco install strawberryperl (includes MinGW)
-//
-#cgo windows CXX: g++
-#cgo windows LDFLAGS: ${SRCDIR}/../lib/windows/libdobby_bridge.a -lstdc++ -lws2_32 -liphlpapi -lbcrypt -lcrypt32 -lsecur32 -luserenv -lntdll -ladvapi32 -lwinmm -static-libgcc -static-libstdc++
+// Windows: Link against the DLL import library (dobby_bridge.lib / dobby_bridge.dll)
+#cgo windows LDFLAGS: -L${SRCDIR}/../lib/windows -ldobby_bridge
 
-// iOS: Link static library explicitly (Apple strongly prefers static linking)
-#cgo ios,arm64 LDFLAGS: ${SRCDIR}/../lib/ios/libdobby_bridge.a -framework Foundation -framework NetworkExtension -framework Network -lc++ -lresolv
+// iOS: Link dynamic library and set rpath
+#cgo ios,arm64 LDFLAGS: -L${SRCDIR}/../lib/ios -ldobby_bridge -Wl,-rpath,@executable_path/Frameworks -Wl,-rpath,@loader_path/Frameworks
 
-// Android: Link static library for each ABI (architecture)
-// ARM64 (most common - modern 64-bit ARM devices)
-#cgo android,arm64 LDFLAGS: ${SRCDIR}/../lib/android/arm64-v8a/libdobby_bridge.a -llog -lm -lc++_static
+// Android: Link dynamic library for each ABI (architecture)
+// ARM64
+#cgo android,arm64 LDFLAGS: -L${SRCDIR}/../lib/android/arm64-v8a -ldobby_bridge -Wl,-rpath,$ORIGIN/../lib/android/arm64-v8a
 
-// ARM32 (legacy 32-bit ARM devices)
-#cgo android,arm LDFLAGS: ${SRCDIR}/../lib/android/armeabi-v7a/libdobby_bridge.a -llog -lm -lc++_static
+// ARM32
+#cgo android,arm LDFLAGS: -L${SRCDIR}/../lib/android/armeabi-v7a -ldobby_bridge -Wl,-rpath,$ORIGIN/../lib/android/armeabi-v7a
 
-// x86_64 (64-bit x86 - emulators and some tablets)
-#cgo android,amd64 LDFLAGS: ${SRCDIR}/../lib/android/x86_64/libdobby_bridge.a -llog -lm -lc++_static
+// x86_64
+#cgo android,amd64 LDFLAGS: -L${SRCDIR}/../lib/android/x86_64 -ldobby_bridge -Wl,-rpath,$ORIGIN/../lib/android/x86_64
 
-// x86 (32-bit x86 - old emulators)
-#cgo android,386 LDFLAGS: ${SRCDIR}/../lib/android/x86/libdobby_bridge.a -llog -lm -lc++_static
+// x86
+#cgo android,386 LDFLAGS: -L${SRCDIR}/../lib/android/x86 -ldobby_bridge -Wl,-rpath,$ORIGIN/../lib/android/x86
 
 #include <stdlib.h>
 #include "../dobby_bridge/dobby_bridge_common.h"
