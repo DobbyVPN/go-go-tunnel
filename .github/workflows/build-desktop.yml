@@ -47,9 +47,11 @@ jobs:
         working-directory: TrustTunnelClient
         run: python ./scripts/bootstrap_conan_deps.py
 
-      - name: Inject dobby_bridge into TrustTunnelClient CMakeLists.txt
+      - name: Inject dobby_bridge and Visibility into TrustTunnelClient CMakeLists.txt
         working-directory: TrustTunnelClient
         run: |
+          # Hide all C++ symbols globally so they don't leak into the shared library
+          sed -i 's/project(vpn_libs C CXX)/project(vpn_libs C CXX)\n\nset(CMAKE_CXX_VISIBILITY_PRESET hidden)\nset(CMAKE_C_VISIBILITY_PRESET hidden)\nset(CMAKE_VISIBILITY_INLINES_HIDDEN ON)/' CMakeLists.txt
           # Add dobby_bridge subdirectory to CMakeLists.txt
           echo 'add_subdirectory("../dobby_bridge" "dobby_bridge")' >> CMakeLists.txt
 
@@ -66,6 +68,15 @@ jobs:
             -DBUILD_STATIC_LIBS=OFF \
             -G "Ninja" ..
           cmake --build . --target dobby_bridge
+
+      - name: Verify Library
+        run: |
+          echo "=== Library Size ==="
+          ls -lh TrustTunnelClient/build/dobby_bridge/libdobby_bridge.so
+          echo "=== Exported DOBBY symbols ==="
+          nm -D TrustTunnelClient/build/dobby_bridge/libdobby_bridge.so | grep -i dobby || true
+          echo "=== Total exported symbols ==="
+          nm -D TrustTunnelClient/build/dobby_bridge/libdobby_bridge.so | wc -l
 
       - name: Upload Linux Artifacts
         uses: actions/upload-artifact@v4
@@ -107,9 +118,11 @@ jobs:
         working-directory: TrustTunnelClient
         run: python ./scripts/bootstrap_conan_deps.py
 
-      - name: Inject dobby_bridge into TrustTunnelClient CMakeLists.txt
+      - name: Inject dobby_bridge and Visibility into TrustTunnelClient CMakeLists.txt
         working-directory: TrustTunnelClient
         run: |
+          # Hide all C++ symbols globally so they don't leak into the shared library
+          sed -i '' 's/project(vpn_libs C CXX)/project(vpn_libs C CXX)\'$'\n\'$'\nset(CMAKE_CXX_VISIBILITY_PRESET hidden)\'$'\nset(CMAKE_C_VISIBILITY_PRESET hidden)\'$'\nset(CMAKE_VISIBILITY_INLINES_HIDDEN ON)/' CMakeLists.txt
           # Add dobby_bridge subdirectory to CMakeLists.txt
           echo 'add_subdirectory("../dobby_bridge" "dobby_bridge")' >> CMakeLists.txt
 
@@ -126,6 +139,15 @@ jobs:
             -DBUILD_STATIC_LIBS=OFF \
             -G "Ninja" ..
           cmake --build . --target dobby_bridge
+
+      - name: Verify Library
+        run: |
+          echo "=== Library Size ==="
+          ls -lh TrustTunnelClient/build/dobby_bridge/libdobby_bridge.dylib
+          echo "=== Exported DOBBY symbols ==="
+          nm -gU TrustTunnelClient/build/dobby_bridge/libdobby_bridge.dylib | grep -i dobby || true
+          echo "=== Total exported symbols ==="
+          nm -gU TrustTunnelClient/build/dobby_bridge/libdobby_bridge.dylib | wc -l
 
       - name: Upload MacOS Artifacts
         uses: actions/upload-artifact@v4
@@ -174,9 +196,11 @@ jobs:
         working-directory: TrustTunnelClient
         run: python ./scripts/bootstrap_conan_deps.py
 
-      - name: Inject dobby_bridge into TrustTunnelClient CMakeLists.txt
+      - name: Inject dobby_bridge and Visibility into TrustTunnelClient CMakeLists.txt
         working-directory: TrustTunnelClient
         run: |
+          # Hide all C++ symbols globally
+          (Get-Content CMakeLists.txt) -replace 'project\(vpn_libs C CXX\)', "project(vpn_libs C CXX)`n`nset(CMAKE_CXX_VISIBILITY_PRESET hidden)`nset(CMAKE_C_VISIBILITY_PRESET hidden)`nset(CMAKE_VISIBILITY_INLINES_HIDDEN ON)" | Set-Content CMakeLists.txt
           # Add dobby_bridge subdirectory to CMakeLists.txt
           Add-Content -Path CMakeLists.txt -Value 'add_subdirectory("../dobby_bridge" "dobby_bridge")'
 
@@ -191,6 +215,13 @@ jobs:
             -DBUILD_STATIC_LIBS=OFF `
             -G "Ninja" ..
           cmake --build . --target dobby_bridge
+
+      - name: Verify Library
+        run: |
+          Write-Host "=== Library Size ==="
+          Get-ChildItem TrustTunnelClient\build\dobby_bridge\dobby_bridge.dll | Select-Object Name, Length
+          Write-Host "=== Exported symbols ==="
+          dumpbin /exports TrustTunnelClient\build\dobby_bridge\dobby_bridge.dll | Select-String "dobby"
 
       - name: Upload Windows Artifacts
         uses: actions/upload-artifact@v4
