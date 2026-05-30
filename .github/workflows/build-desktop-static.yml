@@ -525,6 +525,9 @@ jobs:
         working-directory: TrustTunnelClient
         shell: bash
         run: |
+          echo "=== Pre-downloading conan_provider.cmake ==="
+          cmake -P cmake/conan_bootstrap.cmake
+          
           echo "=== Purging hardcoded MSVC profiles ==="
           # Find any CMake script injecting windows-msvc and delete that specific line entirely
           find . -type f \( -name "*.cmake" -o -name "CMakeLists.txt" \) -exec sed -i '/windows-msvc/d' {} +

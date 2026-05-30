@@ -197,11 +197,20 @@ if(NOT BUILD_STATIC_LIBS)
         # Force MSVC to use Static CRT (/MT) for the DLL
         set_property(TARGET dobby_bridge PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
     elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-        # Statically link libc++ and libgcc into the .so
+        # Statically link the C++ runtime (libc++) and libgcc into the .so
+        # so there is ZERO runtime dependency on any C++ standard library.
+        #
+        # NOTE: -static-libstdc++ is a GCC-only flag and does NOT work with
+        # Clang/libc++. We use -nostdlib++ to suppress automatic C++ stdlib
+        # linking, then explicitly link static libc++ and libc++abi.
         target_link_options(dobby_bridge PRIVATE
-            "-static-libstdc++"
-            "-static-libgcc"
-            "-Wl,--exclude-libs,ALL"
+            "-nostdlib++"                 # Don't auto-link any C++ stdlib
+            "-static-libgcc"             # Statically link libgcc
+            "-Wl,--exclude-libs,ALL"     # Hide ALL symbols from static archives
+        )
+        # Statically link libc++ and libc++abi into the .so
+        target_link_libraries(dobby_bridge PRIVATE
+            "-Wl,-Bstatic" "-lc++" "-lc++abi" "-Wl,-Bdynamic"
         )
     endif()
 endif()
