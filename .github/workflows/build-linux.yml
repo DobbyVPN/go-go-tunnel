@@ -13,7 +13,7 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -111,7 +111,7 @@ jobs:
         if: steps.conan-cache.outputs.cache-hit != 'true'
         with:
           path: ~/.conan2/
-          key: linux-22.04-conan2-${{ hashFiles('TrustTunnelClient/conanfile.py') }}
+          key: linux-conan2-${{ hashFiles('TrustTunnelClient/conanfile.py') }}
 
       - name: Build dobby_bridge
         working-directory: TrustTunnelClient
