@@ -1,0 +1,155 @@
+name: Build Windows
+
+on:
+  push:
+    branches: ["*"]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CONAN_VER: 2.12
+  BUILD_DIR: build
+
+jobs:
+  windows-x86_64:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      # MSVC is REQUIRED — TrustTunnel's conan profiles expect MSVC on Windows.
+      # CGO uses MinGW GCC, but that's fine: the C API boundary is ABI-compatible.
+      - name: Set up MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Install packages
+        run: |
+          choco install strawberryperl nasm ninja -y
+          pip install conan~=${{ env.CONAN_VER }}
+          pip install -r TrustTunnelClient\requirements.txt
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.85"
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: "go.mod"
+
+      - name: Set up ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: windows-ccache
+
+      - name: Cargo cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: windows-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Conan cache
+        uses: actions/cache@v4
+        id: conan-cache
+        with:
+          path: ~/.conan2/
+          key: windows-conan2-${{ hashFiles('TrustTunnelClient/conanfile.py') }}
+          restore-keys: windows-conan2-
+
+      - name: Patch dns-libs version in conanfile.py
+        working-directory: TrustTunnelClient
+        run: |
+          # Update dns-libs version from 2.8.51 to 2.8.52 (upstream TrustTunnel hasn't updated yet)
+          sed -i 's/dns-libs\/2.8.51@/dns-libs\/2.8.52@/' conanfile.py
+          echo "Patched conanfile.py to use dns-libs 2.8.52"
+          grep "dns-libs" conanfile.py
+
+      - name: Bootstrap conan
+        if: steps.conan-cache.outputs.cache-hit != 'true'
+        working-directory: TrustTunnelClient
+        run: python scripts\bootstrap_conan_deps.py
+
+      - name: Prepare dobby_bridge build
+        run: |
+          Add-Content -Path TrustTunnelClient\CMakeLists.txt -Value 'add_subdirectory("../dobby_bridge" "dobby_bridge")'
+
+      - name: CMake configure
+        working-directory: TrustTunnelClient
+        run: |
+          mkdir ${{ env.BUILD_DIR }}
+          cd ${{ env.BUILD_DIR }}
+          cmake -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_C_COMPILER="cl.exe" `
+            -DCMAKE_CXX_COMPILER="cl.exe" `
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache `
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache `
+            -DIPV6_UNAVAILABLE=ON `
+            -G "Ninja" `
+            ..
+
+      - name: Save conan cache
+        uses: actions/cache/save@v4
+        if: steps.conan-cache.outputs.cache-hit != 'true'
+        with:
+          path: ~/.conan2/
+          key: windows-conan2-${{ hashFiles('TrustTunnelClient/conanfile.py') }}
+
+      - name: Build dobby_bridge
+        working-directory: TrustTunnelClient
+        run: cmake --build ${{ env.BUILD_DIR }} --target dobby_bridge
+
+      - name: Prepare library directory
+        run: |
+          New-Item -ItemType Directory -Force -Path lib\windows
+          Copy-Item TrustTunnelClient\${{ env.BUILD_DIR }}\dobby_bridge\dobby_bridge.dll lib\windows\
+          Copy-Item TrustTunnelClient\${{ env.BUILD_DIR }}\dobby_bridge\dobby_bridge.lib lib\windows\
+          Write-Host "=== Library files ==="
+          Get-ChildItem lib\windows\ | Format-Table Name, Length
+          Write-Host "=== DLL exports ==="
+          dumpbin /exports lib\windows\dobby_bridge.dll | Select-String "dobby"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dobby_bridge-windows-x86_64
+          path: |
+            lib/windows/dobby_bridge.dll
+            lib/windows/dobby_bridge.lib
+
+      - name: Build Go example
+        working-directory: examples
+        run: go build -v -o examples.exe
+
+      - name: Run example (crash test)
+        working-directory: examples
+        run: |
+          # Copy DLL next to the executable for runtime loading
+          Copy-Item ..\lib\windows\dobby_bridge.dll .
+          # Start the process and wait up to 5 seconds
+          $process = Start-Process -FilePath .\examples.exe -PassThru -WindowStyle Hidden
+          Start-Sleep -Seconds 5
+          if ($process.HasExited) {
+            $ec = $process.ExitCode
+            if ($ec -ne 0) {
+              Write-Host "❌ CRASH detected with exit code $ec"
+              exit 1
+            }
+            Write-Host "✅ Test passed (exited normally)"
+          } else {
+            Stop-Process -Id $process.Id -Force
+            Write-Host "✅ Test passed (no crash after 5s)"
+          }

@@ -37,12 +37,12 @@ func main() {
 	// This is a minimal example - adjust according to your needs
 	config := `
 [server]
-address = "your-server.com"
+address = "your_server_address"
 port = 443
 
 [credentials]
-username = "your-username"
-password = "your-password"
+username = "dobby_user"
+password = "dobby_password"
 
 [listener]
 type = "socks"
