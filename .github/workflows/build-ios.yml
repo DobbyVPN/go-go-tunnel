@@ -132,10 +132,16 @@ jobs:
             -not -name "*.dll.a" \
             | sort)
 
-          echo "=== Static libraries found ==="
+          echo "=== TrustTunnel Static libraries found ==="
           echo "$STATIC_LIBS"
 
-          libtool -static -o lib/ios/libdobby_bridge.a $STATIC_LIBS
+          # Find Conan static libraries
+          CONAN_LIBS=$(find ~/.conan2/p/b -type f -name "*.a" | grep "/p/lib/" | sort)
+          
+          echo "=== Conan Static libraries found ==="
+          echo "$CONAN_LIBS"
+
+          libtool -static -o lib/ios/libdobby_bridge.a $STATIC_LIBS $CONAN_LIBS
 
           echo "=== Merged library info ==="
           file lib/ios/libdobby_bridge.a
