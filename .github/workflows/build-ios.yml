@@ -135,8 +135,8 @@ jobs:
           echo "=== TrustTunnel Static libraries found ==="
           echo "$STATIC_LIBS"
 
-          # Find Conan static libraries
-          CONAN_LIBS=$(find ~/.conan2/p/b -type f -name "*.a" | grep "/p/lib/" | sort)
+          # Find Conan static libraries (filtering for arm64 to avoid host tool libraries)
+          CONAN_LIBS=$(find ~/.conan2/p -type f -name "*.a" -exec sh -c 'lipo -info "$1" 2>/dev/null | grep -q "arm64" && echo "$1"' _ {} \; | sort)
           
           echo "=== Conan Static libraries found ==="
           echo "$CONAN_LIBS"
