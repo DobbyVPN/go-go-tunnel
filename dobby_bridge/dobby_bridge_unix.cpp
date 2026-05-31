@@ -34,6 +34,8 @@ static dobby_on_protect_socket_t g_protect_callback = nullptr;
 
 // VPN context
 struct dobby_vpn_context {
+    std::string config_str;
+    toml::parse_result parsed_config;
     std::unique_ptr<ag::TrustTunnelClient> client;
     std::unique_ptr<ag::AutoNetworkMonitor> network_monitor;
 };
@@ -78,14 +80,19 @@ void dobby_vpn_start(const char *toml_config, dobby_on_state_changed_t state_cha
 
     ag::event_loop::submit(m_ev_loop.get(), [config_str, state_changed_cb, state_changed_cb_arg]() {
         
+        m_vpn = new dobby_vpn_context();
+        m_vpn->config_str = config_str;
+
         // 3. Parse the TOML *inside* the background thread
-        toml::parse_result parsed_config = toml::parse(config_str);
-        if (!parsed_config) {
+        m_vpn->parsed_config = toml::parse(m_vpn->config_str);
+        if (!m_vpn->parsed_config) {
             errlog(g_logger, "Failed to parse TOML config");
+            delete m_vpn;
+            m_vpn = nullptr;
             return;
         }
 
-        auto trusttunnel_config = ag::TrustTunnelConfig::build_config(parsed_config);
+        auto trusttunnel_config = ag::TrustTunnelConfig::build_config(m_vpn->parsed_config);
         ag::vpn_post_quantum_group_set_enabled(trusttunnel_config->post_quantum_group_enabled);
 
         ag::VpnCallbacks callbacks;
@@ -109,7 +116,6 @@ void dobby_vpn_start(const char *toml_config, dobby_on_state_changed_t state_cha
         };
 
         // 4. Initialize the client safely
-        m_vpn = new dobby_vpn_context();
         m_vpn->client = std::make_unique<ag::TrustTunnelClient>(std::move(*trusttunnel_config), std::move(callbacks));
 
         // Optional: Start network monitor
