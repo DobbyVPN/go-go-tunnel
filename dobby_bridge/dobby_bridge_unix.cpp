@@ -93,6 +93,12 @@ void dobby_vpn_start(const char *toml_config, dobby_on_state_changed_t state_cha
         }
 
         auto trusttunnel_config = ag::TrustTunnelConfig::build_config(m_vpn->parsed_config);
+        if (!trusttunnel_config) {
+            errlog(g_logger, "Failed to build TrustTunnel config from TOML");
+            delete m_vpn;
+            m_vpn = nullptr;
+            return;
+        }
         ag::vpn_post_quantum_group_set_enabled(trusttunnel_config->post_quantum_group_enabled);
 
         ag::VpnCallbacks callbacks;

@@ -36,21 +36,17 @@ func main() {
 	// TrustTunnel TOML configuration
 	// This is a minimal example - adjust according to your needs
 	config := `
-[server]
-address = "your_server_address"
-port = 443
+vpn_mode = "general"
 
-[credentials]
+[endpoint]
+hostname = "example.com"
+addresses = ["1.1.1.1"]
 username = "dobby_user"
 password = "dobby_password"
+upstream_protocol = "http2"
 
-[listener]
-type = "socks"
+[listener.socks]
 address = "127.0.0.1:1080"
-
-[upstream]
-protocol = "http2"
-location = "us-east"
 `
 
 	// Start the VPN
