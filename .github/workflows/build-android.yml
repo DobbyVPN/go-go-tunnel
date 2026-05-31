@@ -65,6 +65,9 @@ jobs:
           targets: aarch64-linux-android
 
       - name: Install cargo-ndk
+        run: cargo install cargo-ndk
+
+      - name: Install cargo-ndk
         run: cargo install cargo-ndk || true
 
       - name: Cargo cache

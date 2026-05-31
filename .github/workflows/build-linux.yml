@@ -111,7 +111,7 @@ jobs:
         if: steps.conan-cache.outputs.cache-hit != 'true'
         with:
           path: ~/.conan2/
-          key: linux-conan2-${{ hashFiles('TrustTunnelClient/conanfile.py') }}
+          key: linux-22.04-conan2-${{ hashFiles('TrustTunnelClient/conanfile.py') }}
 
       - name: Build dobby_bridge
         working-directory: TrustTunnelClient
@@ -142,12 +142,15 @@ jobs:
         run: |
           export LD_LIBRARY_PATH=$PWD/../lib/linux:$LD_LIBRARY_PATH
           # Run for 5 seconds — if it doesn't crash, the test passes.
-          # timeout returns 124 on timeout (expected), segfault returns 139.
-          timeout 5 ./examples || EC=$?
-          EC=${EC:-0}
-          if [ "$EC" -eq 0 ] || [ "$EC" -eq 124 ]; then
-            echo "✅ Test passed (exit code $EC)"
+          ./examples &
+          PID=$!
+          sleep 5
+          if kill -0 $PID 2>/dev/null; then
+            kill $PID
+            echo "✅ Test passed (no crash after 5s)"
           else
+            wait $PID
+            EC=$?
             echo "❌ CRASH detected with exit code $EC"
             exit 1
           fi

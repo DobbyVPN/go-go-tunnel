@@ -141,11 +141,15 @@ jobs:
         run: |
           export DYLD_LIBRARY_PATH=$PWD/../lib/macos:$DYLD_LIBRARY_PATH
           # Run for 5 seconds — if it doesn't crash, the test passes.
-          timeout 5 ./examples || EC=$?
-          EC=${EC:-0}
-          if [ "$EC" -eq 0 ] || [ "$EC" -eq 124 ]; then
-            echo "✅ Test passed (exit code $EC)"
+          ./examples &
+          PID=$!
+          sleep 5
+          if kill -0 $PID 2>/dev/null; then
+            kill $PID
+            echo "✅ Test passed (no crash after 5s)"
           else
+            wait $PID
+            EC=$?
             echo "❌ CRASH detected with exit code $EC"
             exit 1
           fi

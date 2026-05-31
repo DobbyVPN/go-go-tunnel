@@ -143,3 +143,13 @@ jobs:
         with:
           name: libdobby_bridge-ios-arm64
           path: lib/ios/libdobby_bridge.a
+
+      - name: Build Go example (verify linking)
+        working-directory: examples
+        run: |
+          # Build the Go example for iOS arm64 using the iOS SDK toolchain.
+          # We don't run it (requires simulator or device), but we verify it links perfectly.
+          CGO_ENABLED=1 GOOS=ios GOARCH=arm64 \
+            CC="$(xcrun --sdk iphoneos --find clang) -isysroot $(xcrun --sdk iphoneos --show-sdk-path)" \
+            CXX="$(xcrun --sdk iphoneos --find clang++) -isysroot $(xcrun --sdk iphoneos --show-sdk-path)" \
+            go build -v -tags static -o examples_ios
