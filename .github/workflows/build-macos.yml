@@ -153,3 +153,149 @@ jobs:
             echo "❌ CRASH detected with exit code $EC"
             exit 1
           fi
+
+  macos-arm64-static:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install packages
+        run: |
+          brew install ninja llvm@21
+
+          # Patch libc++ availability header (required for compatibility)
+          sed -i '' 's/_LIBCPP_INTRODUCED_IN_LLVM_21 1/_LIBCPP_INTRODUCED_IN_LLVM_21 0/g' \
+            "$(brew --prefix llvm@21)/include/c++/v1/__configuration/availability.h"
+
+          pip install -r TrustTunnelClient/requirements.txt
+          pip install conan~=$CONAN_VER
+
+          echo "/opt/homebrew/opt/llvm@21/bin" >> $GITHUB_PATH
+          # Add python's bin dir to path
+          PY_BIN=$(python3 -c "import sysconfig; print(sysconfig.get_path('scripts'))")
+          echo "$PY_BIN" >> $GITHUB_PATH
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.85"
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: "go.mod"
+
+      - name: Set up ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: macos-static-ccache
+
+      - name: Cargo cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: macos-static-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Conan cache
+        uses: actions/cache@v4
+        id: conan-cache
+        with:
+          path: ~/.conan2/
+          key: macos-static-conan2-${{ hashFiles('TrustTunnelClient/conanfile.py') }}
+          restore-keys: macos-static-conan2-
+
+      - name: Patch dns-libs version in conanfile.py
+        working-directory: TrustTunnelClient
+        run: |
+          sed -i '' 's/dns-libs\/2.8.51@/dns-libs\/2.8.52@/' conanfile.py
+
+      - name: Bootstrap conan
+        if: steps.conan-cache.outputs.cache-hit != 'true'
+        working-directory: TrustTunnelClient
+        run: ./scripts/bootstrap_conan_deps.py
+
+      - name: Prepare dobby_bridge build
+        run: |
+          echo 'add_subdirectory("../dobby_bridge" "dobby_bridge")' >> TrustTunnelClient/CMakeLists.txt
+
+      - name: CMake configure
+        working-directory: TrustTunnelClient
+        run: |
+          mkdir -p $BUILD_DIR && cd $BUILD_DIR && \
+          cmake -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_ARCHITECTURES="arm64" \
+            -DCMAKE_CXX_COMPILER="clang++" \
+            -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DIPV6_UNAVAILABLE=ON \
+            -DDOBBY_BRIDGE_STATIC=ON \
+            -GNinja \
+            ..
+
+      - name: Save conan cache
+        uses: actions/cache/save@v4
+        if: steps.conan-cache.outputs.cache-hit != 'true'
+        with:
+          path: ~/.conan2/
+          key: macos-static-conan2-${{ hashFiles('TrustTunnelClient/conanfile.py') }}
+
+      - name: Build dobby_bridge
+        working-directory: TrustTunnelClient
+        run: cmake --build $BUILD_DIR --target dobby_bridge
+
+      - name: Prepare library directory
+        run: |
+          mkdir -p lib/macos
+          
+          STATIC_LIBS=$(find TrustTunnelClient/$BUILD_DIR -name "*.a" \
+            -not -path "*/CMakeFiles/*" \
+            -not -name "*.dll.a" \
+            | sort)
+            
+          CONAN_LIBS=$(find ~/.conan2/p -type f -name "*.a" -exec sh -c 'lipo -info "$1" 2>/dev/null | grep -q "arm64" && echo "$1"' _ {} \; | sort)
+          
+          libtool -static -o lib/macos/libdobby_bridge.a $STATIC_LIBS $CONAN_LIBS
+          
+          echo "=== Merged library info ==="
+          file lib/macos/libdobby_bridge.a
+          ls -lh lib/macos/libdobby_bridge.a
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: libdobby_bridge-macos-arm64-static
+          path: lib/macos/libdobby_bridge.a
+
+      - name: Build Go example
+        working-directory: examples
+        run: go build -tags static -v -o examples
+
+      - name: Run example (crash test)
+        working-directory: examples
+        run: |
+          # No DYLD_LIBRARY_PATH needed for static builds!
+          ./examples &
+          PID=$!
+          sleep 5
+          if kill -0 $PID 2>/dev/null; then
+            kill $PID
+            echo "✅ Test passed (no crash after 5s)"
+          else
+            wait $PID
+            EC=$?
+            echo "❌ CRASH detected with exit code $EC"
+            exit 1
+          fi

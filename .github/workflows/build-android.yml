@@ -163,3 +163,157 @@ jobs:
           export CXX="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang++"
           
           go build -v -o examples_android
+
+  android-arm64-static:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: "temurin"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android NDK
+        run: |
+          sdkmanager "ndk;${{ env.ANDROID_NDK_VERSION }}"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/${{ env.ANDROID_NDK_VERSION }}" >> $GITHUB_ENV
+
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build
+
+          pip install -r TrustTunnelClient/requirements.txt
+          pip install conan~=$CONAN_VER
+
+          # Install LLVM/Clang (needed for host tools during cross-compilation)
+          curl -O https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh $LLVM_MAJOR_VER
+          rm ./llvm.sh
+          sudo apt-get install -y libc++-${LLVM_MAJOR_VER}-dev libclang-rt-${LLVM_MAJOR_VER}-dev
+          echo "/usr/lib/llvm-$LLVM_MAJOR_VER/bin" >> $GITHUB_PATH
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.85"
+          targets: aarch64-linux-android
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --version 3.5.4
+
+      - name: Cargo cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: android-static-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Conan cache
+        uses: actions/cache@v4
+        id: conan-cache
+        with:
+          path: ~/.conan2/
+          key: android-static-conan2-${{ hashFiles('TrustTunnelClient/conanfile.py') }}
+          restore-keys: android-static-conan2-
+
+      - name: Patch dns-libs version in conanfile.py
+        working-directory: TrustTunnelClient
+        run: |
+          sed -i 's/dns-libs\/2.8.51@/dns-libs\/2.8.52@/' conanfile.py
+
+      - name: Bootstrap conan
+        if: steps.conan-cache.outputs.cache-hit != 'true'
+        working-directory: TrustTunnelClient
+        run: ./scripts/bootstrap_conan_deps.py
+
+      - name: Prepare dobby_bridge build
+        run: |
+          echo 'add_subdirectory("../dobby_bridge" "dobby_bridge")' >> TrustTunnelClient/CMakeLists.txt
+
+      - name: CMake configure (Android cross-compile)
+        working-directory: TrustTunnelClient
+        run: |
+          mkdir -p $BUILD_DIR && cd $BUILD_DIR && \
+          cmake -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
+            -DANDROID_ABI=${{ env.ANDROID_ABI }} \
+            -DANDROID_PLATFORM=${{ env.ANDROID_PLATFORM }} \
+            -DANDROID_STL=c++_static \
+            -DIPV6_UNAVAILABLE=ON \
+            -DDOBBY_BRIDGE_STATIC=ON \
+            -GNinja \
+            ..
+
+      - name: Save conan cache
+        uses: actions/cache/save@v4
+        if: steps.conan-cache.outputs.cache-hit != 'true'
+        with:
+          path: ~/.conan2/
+          key: android-static-conan2-${{ hashFiles('TrustTunnelClient/conanfile.py') }}
+
+      - name: Build dobby_bridge
+        working-directory: TrustTunnelClient
+        run: cmake --build $BUILD_DIR --target dobby_bridge
+
+      - name: Prepare library directory
+        run: |
+          mkdir -p lib/android/${{ env.ANDROID_ABI }}
+          
+          STATIC_LIBS=$(find TrustTunnelClient/$BUILD_DIR -name "*.a" \
+            -not -path "*/CMakeFiles/*" \
+            -not -name "*.dll.a" \
+            | sort)
+            
+          CONAN_LIBS=$(find ~/.conan2/p -type f -name "*.a" | grep "/p/lib/" | sort)
+          
+          echo "create lib/android/${{ env.ANDROID_ABI }}/libdobby_bridge.a" > merge.mri
+          for lib in $STATIC_LIBS $CONAN_LIBS; do
+            echo "addlib $lib" >> merge.mri
+          done
+          echo "save" >> merge.mri
+          echo "end" >> merge.mri
+          
+          $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar -M < merge.mri
+          
+          echo "=== Merged library info ==="
+          file lib/android/${{ env.ANDROID_ABI }}/libdobby_bridge.a
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: libdobby_bridge-android-${{ env.ANDROID_ABI }}-static
+          path: lib/android/${{ env.ANDROID_ABI }}/libdobby_bridge.a
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - name: Build Go example (verify linking)
+        working-directory: examples
+        run: |
+          export CGO_ENABLED=1
+          export GOOS=android
+          export GOARCH=arm64
+          export CC="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang"
+          export CXX="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang++"
+          
+          go build -tags static -v -o examples_android
