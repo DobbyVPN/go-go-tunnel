@@ -293,6 +293,8 @@ jobs:
           
           $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar -M < merge.mri
           
+          $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-debug lib/android/${{ env.ANDROID_ABI }}/libdobby_bridge.a
+          
           echo "=== Merged library info ==="
           file lib/android/${{ env.ANDROID_ABI }}/libdobby_bridge.a
 

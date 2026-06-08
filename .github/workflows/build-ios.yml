@@ -142,6 +142,7 @@ jobs:
           echo "$CONAN_LIBS"
 
           libtool -static -o lib/ios/libdobby_bridge.a $STATIC_LIBS $CONAN_LIBS
+          strip -S lib/ios/libdobby_bridge.a
 
           echo "=== Merged library info ==="
           file lib/ios/libdobby_bridge.a

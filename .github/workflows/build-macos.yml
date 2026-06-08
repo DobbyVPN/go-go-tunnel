@@ -268,6 +268,7 @@ jobs:
           CONAN_LIBS=$(find ~/.conan2/p -type f -name "*.a" -exec sh -c 'lipo -info "$1" 2>/dev/null | grep -q "arm64" && echo "$1"' _ {} \; | sort)
           
           libtool -static -o lib/macos/libdobby_bridge.a $STATIC_LIBS $CONAN_LIBS
+          strip -S lib/macos/libdobby_bridge.a
           
           echo "=== Merged library info ==="
           file lib/macos/libdobby_bridge.a
