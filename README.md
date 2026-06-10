@@ -2,11 +2,12 @@
 
 A Go wrapper for the TrustTunnel VPN library, providing cross-platform support for Windows, Linux, macOS, iOS, and Android.
 
-[![Build Windows](https://github.com/TrueKotenka/TrustTunnel-Go/actions/workflows/build-desktop.yml/badge.svg)](https://github.com/TrueKotenka/TrustTunnel-Go/actions/workflows/build-windows.yml)
-[![Build Linux](https://github.com/TrueKotenka/TrustTunnel-Go/actions/workflows/build-desktop.yml/badge.svg)](https://github.com/TrueKotenka/TrustTunnel-Go/actions/workflows/build-linux.yml)
-[![Build MacOs](https://github.com/TrueKotenka/TrustTunnel-Go/actions/workflows/build-desktop.yml/badge.svg)](https://github.com/TrueKotenka/TrustTunnel-Go/actions/workflows/build-macos.yml)
-[![Build Android](https://github.com/TrueKotenka/TrustTunnel-Go/actions/workflows/build-mobile.yml/badge.svg)](https://github.com/TrueKotenka/TrustTunnel-Go/actions/workflows/build-android.yml)
-[![Build iOs](https://github.com/TrueKotenka/TrustTunnel-Go/actions/workflows/build-desktop.yml/badge.svg)](https://github.com/TrueKotenka/TrustTunnel-Go/actions/workflows/build-ios.yml)
+Build workflows:
+[Windows](https://github.com/TrueKotenka/TrustTunnel-Go/actions/workflows/build-windows.yml) |
+[Linux](https://github.com/TrueKotenka/TrustTunnel-Go/actions/workflows/build-desktop.yml/badge.svg) |
+[MacOs](https://github.com/TrueKotenka/TrustTunnel-Go/actions/workflows/build-macos.yml) |
+[Android](https://github.com/TrueKotenka/TrustTunnel-Go/actions/workflows/build-android.yml) |
+[iOs](https://github.com/TrueKotenka/TrustTunnel-Go/actions/workflows/build-ios.yml)
 
 ## Overview
 
