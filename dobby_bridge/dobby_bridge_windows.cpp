@@ -123,19 +123,14 @@ void dobby_vpn_start(const char *toml_config, dobby_on_state_changed_t state_cha
         ag::VpnCallbacks callbacks;
         
         // Windows-specific socket protection handler
-        if (std::holds_alternative<ag::TrustTunnelConfig::TunListener>(trusttunnel_config->listener)) {
-            // For TUN listener, use Windows Wintun protection
-            callbacks.protect_handler = [](ag::SocketProtectEvent *event) {
-                // Use TrustTunnel's built-in Windows socket protection
+        callbacks.protect_handler = [](ag::SocketProtectEvent *event) {
+            if (g_protect_callback) {
+                event->result = g_protect_callback(event->fd);
+            } else {
+                // Use TrustTunnel's built-in Windows socket protection by default
                 event->result = !ag::vpn_win_socket_protect(event->fd, event->peer);
-            };
-        } else {
-            // For other listeners (SOCKS, etc.), use user callback or default
-            callbacks.protect_handler = [](ag::SocketProtectEvent *event) {
-                // If Go provides a callback, use it. Otherwise, default to 0 (Allow).
-                event->result = g_protect_callback ? g_protect_callback(event->fd) : 0;
-            };
-        }
+            }
+        };
         
         // Windows-specific certificate verification
         callbacks.verify_handler = [](ag::VpnVerifyCertificateEvent *event) {
