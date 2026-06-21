@@ -136,17 +136,40 @@ jobs:
         working-directory: examples
         run: go build -v -o examples
 
-      - name: Run example (crash test)
+      - name: Run example (crash test & proxy test)
         working-directory: examples
+        env:
+          TT_CONFIG: ${{ secrets.TT_CONFIG }}
         run: |
           export DYLD_LIBRARY_PATH=$PWD/../lib/macos:$DYLD_LIBRARY_PATH
-          # Run for 5 seconds — if it doesn't crash, the test passes.
+          # Run example and wait for it to initialize
           ./examples &
           PID=$!
           sleep 5
+          
+          # Check if proxy is working
+          echo "Testing proxy connection..."
+          SUCCESS=0
+          for i in {1..10}; do
+            if curl -sS --max-time 5 -x socks5h://127.0.0.1:10808 http://1.1.1.1 > /dev/null; then
+              SUCCESS=1
+              break
+            fi
+            echo "Waiting for proxy to be ready... Attempt $i/10"
+            sleep 2
+          done
+          
+          if [ $SUCCESS -eq 1 ]; then
+            echo "✅ Proxy test passed! Traffic is successfully routing."
+          else
+            echo "❌ Proxy test failed! Could not route traffic."
+            kill $PID 2>/dev/null || true
+            exit 1
+          fi
+          
           if kill -0 $PID 2>/dev/null; then
             kill $PID
-            echo "✅ Test passed (no crash after 5s)"
+            echo "✅ Crash test passed (no crash after proxy test)"
           else
             wait $PID
             EC=$?
@@ -284,16 +307,39 @@ jobs:
         working-directory: examples
         run: go build -tags static -v -o examples
 
-      - name: Run example (crash test)
+      - name: Run example (crash test & proxy test)
         working-directory: examples
+        env:
+          TT_CONFIG: ${{ secrets.TT_CONFIG }}
         run: |
           # No DYLD_LIBRARY_PATH needed for static builds!
           ./examples &
           PID=$!
           sleep 5
+          
+          # Check if proxy is working
+          echo "Testing proxy connection..."
+          SUCCESS=0
+          for i in {1..10}; do
+            if curl -sS --max-time 5 -x socks5h://127.0.0.1:10808 http://1.1.1.1 > /dev/null; then
+              SUCCESS=1
+              break
+            fi
+            echo "Waiting for proxy to be ready... Attempt $i/10"
+            sleep 2
+          done
+          
+          if [ $SUCCESS -eq 1 ]; then
+            echo "✅ Proxy test passed! Traffic is successfully routing."
+          else
+            echo "❌ Proxy test failed! Could not route traffic."
+            kill $PID 2>/dev/null || true
+            exit 1
+          fi
+          
           if kill -0 $PID 2>/dev/null; then
             kill $PID
-            echo "✅ Test passed (no crash after 5s)"
+            echo "✅ Crash test passed (no crash after proxy test)"
           else
             wait $PID
             EC=$?

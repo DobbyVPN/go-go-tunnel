@@ -58,3 +58,6 @@ Makefile
 lib/**/*.dylib
 lib/**/*.so
 lib/**/*.dll
+
+# Configs
+config.toml

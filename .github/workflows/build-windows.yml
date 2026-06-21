@@ -134,22 +134,49 @@ jobs:
         working-directory: examples
         run: go build -v -o examples.exe
 
-      - name: Run example (crash test)
+      - name: Run example (crash test & proxy test)
         working-directory: examples
+        env:
+          TT_CONFIG: ${{ secrets.TT_CONFIG }}
         run: |
           # Copy DLL next to the executable for runtime loading
           Copy-Item ..\lib\windows\dobby_bridge.dll .
           # Start the process and wait up to 5 seconds
           $process = Start-Process -FilePath .\examples.exe -PassThru -WindowStyle Hidden
           Start-Sleep -Seconds 5
+          
           if ($process.HasExited) {
             $ec = $process.ExitCode
-            if ($ec -ne 0) {
-              Write-Host "❌ CRASH detected with exit code $ec"
-              exit 1
+            Write-Host "❌ CRASH detected with exit code $ec"
+            exit 1
+          }
+          
+          # Test proxy
+          Write-Host "Testing proxy connection..."
+          $success = $false
+          for ($i = 1; $i -le 10; $i++) {
+            curl.exe -sS --max-time 5 -x socks5h://127.0.0.1:10808 http://1.1.1.1 | Out-Null
+            if ($LASTEXITCODE -eq 0) {
+              $success = $true
+              break
             }
-            Write-Host "✅ Test passed (exited normally)"
+            Write-Host "Waiting for proxy to be ready... Attempt $i/10"
+            Start-Sleep -Seconds 2
+          }
+
+          if ($success) {
+            Write-Host "✅ Proxy test passed! Traffic is successfully routing."
           } else {
+            Write-Host "❌ Proxy test failed! Could not route traffic."
             Stop-Process -Id $process.Id -Force
-            Write-Host "✅ Test passed (no crash after 5s)"
+            exit 1
+          }
+
+          if (-not $process.HasExited) {
+            Stop-Process -Id $process.Id -Force
+            Write-Host "✅ Crash test passed (no crash after proxy test)"
+          } else {
+            $ec = $process.ExitCode
+            Write-Host "❌ CRASH detected with exit code $ec"
+            exit 1
           }

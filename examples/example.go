@@ -3,6 +3,7 @@ package main
 
 import (
 	"log"
+	"os"
 	"time"
 
 	tt "trusttunnel-go/manager"
@@ -35,23 +36,48 @@ func main() {
 
 	// TrustTunnel TOML configuration
 	// This is a minimal example - adjust according to your needs
-	config := `
-vpn_mode = "general"
+	// First, try to load config from environment variable
+	configStr := os.Getenv("TT_CONFIG")
 
-[endpoint]
-hostname = "example.com"
-addresses = ["1.1.1.1"]
-username = "dobby_user"
-password = "dobby_password"
-upstream_protocol = "http2"
+	// If not in env, try to load from a local file that won't be committed
+	if configStr == "" {
+		if bytes, err := os.ReadFile("config.toml"); err == nil {
+			configStr = string(bytes)
+		}
+	}
 
-[listener.socks]
-address = "127.0.0.1:1080"
-`
+	// If no config provided, use a placeholder
+	if configStr == "" {
+		log.Println("No TT_CONFIG env var or config.toml found. Using dummy configuration.")
+		configStr = `
+	loglevel = "info"
+	vpn_mode = "general"
+	killswitch_enabled = false
+	post_quantum_group_enabled = true
+	exclusions = []
+
+	[endpoint]
+	hostname = "dummy.server.com"
+	addresses = ["127.0.0.1:443"]
+	custom_sni = "dummy.server.com"
+	has_ipv6 = true
+	username = "dummy_user"
+	password = "dummy_password"
+	client_random = ""
+	skip_verification = true
+	upstream_protocol = "http3"
+	anti_dpi = true
+	dns_upstreams = []
+
+	[listener]
+	[listener.socks]
+	address = "127.0.0.1:10808"
+	`
+	}
 
 	// Start the VPN
 	log.Println("Starting VPN...")
-	if err := manager.Start(config); err != nil {
+	if err := manager.Start(configStr); err != nil {
 		log.Fatalf("Failed to start VPN: %v", err)
 	}
 
@@ -65,3 +91,15 @@ address = "127.0.0.1:1080"
 
 	log.Println("VPN stopped.")
 }
+
+/*
+To create config for your server use trusttunnel's setup_wizard
+https://github.com/TrustTunnel/TrustTunnelClient/tree/master/trusttunnel/setup_wizard
+
+./setup_wizard --mode non-interactive `
+    --address address:port `
+    --hostname server.domain.com `
+    --creds user:password `
+    --cert cert.pem `
+    --settings trusttunnel_client.toml
+*/
