@@ -122,7 +122,7 @@ Load command 1
       sdk 15.5
 """
         records = MODULE.parse_otool(output)
-        MODULE.verify(records, "macos", "15.0")
+        MODULE.verify(records, "macos", "12.0")
 
     def test_rejects_output_without_member_targets(self) -> None:
         with self.assertRaises(MODULE.VerificationError):

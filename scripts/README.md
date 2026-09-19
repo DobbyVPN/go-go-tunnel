@@ -7,7 +7,11 @@ The supported build contract is:
 - Conan 2.12.2 in a new, absolute `CONAN_HOME` for each platform;
 - Rust 1.85.0 for the Apple Rust targets;
 - iOS arm64 with a maximum deployment target of 15.6;
-- macOS arm64 with a maximum deployment target of 15.0.
+- macOS arm64 with a maximum deployment target of 12.0.
+
+All Go builds use Go 1.26.8 with `GOTOOLCHAIN=local`; the build fails closed
+when another Go toolchain is selected instead of downloading or switching
+implicitly.
 
 From a clean recursive checkout, install the workflow prerequisites and run:
 

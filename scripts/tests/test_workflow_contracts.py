@@ -33,11 +33,26 @@ class WorkflowContractTests(unittest.TestCase):
             'export CXXFLAGS="$PREFIX_FLAGS"',
             "lipo -archs lib/macos/libdobby_bridge.dylib",
             "vtool -show-build lib/macos/libdobby_bridge.dylib",
-            "^[[:space:]]*minos[[:space:]]+15(\\.0+)?[[:space:]]*$",
+            "^[[:space:]]*minos[[:space:]]+12(\\.0+)?[[:space:]]*$",
             "macOS dynamic archive contains an unremapped local build path",
         ):
             self.assertIn(required, source)
         self.assertNotIn("grep -Eq 'minos +15(\\.0+)?'", source)
+
+    def test_build_workflows_pin_the_exact_go_toolchain(self) -> None:
+        expected_counts = {
+            "build-android.yml": 2,
+            "build-ios.yml": 1,
+            "build-linux.yml": 1,
+            "build-macos.yml": 2,
+            "build-windows.yml": 1,
+        }
+        for name, count in expected_counts.items():
+            source = (WORKFLOWS / name).read_text(encoding="utf-8")
+            self.assertIn('GOTOOLCHAIN: "local"', source, name)
+            self.assertEqual(source.count("name: Verify exact Go toolchain"), count, name)
+            self.assertEqual(source.count("= go1.26.8"), count, name)
+            self.assertEqual(source.count("go env GOTOOLCHAIN"), count, name)
 
     def test_apple_static_jobs_run_every_tooling_suite(self) -> None:
         suites = (
@@ -132,6 +147,7 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertNotIn("cargo install cargo-ndk || true", source)
         self.assertEqual(source.count('go-version-file: "go.mod"'), 2)
         self.assertNotIn("go-version: '1.25'", source)
+        self.assertIn('GOTOOLCHAIN: "local"', source)
 
     def test_windows_declares_the_exact_static_msvc_runtime(self) -> None:
         source = (WORKFLOWS / "build-windows.yml").read_text(encoding="utf-8")

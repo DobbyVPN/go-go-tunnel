@@ -8,6 +8,7 @@ on:
 
 env:
   CONAN_VERSION: 2.12.2
+  GOTOOLCHAIN: "local"
   BUILD_DIR: build
 
 jobs:
@@ -74,6 +75,12 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version-file: "go.mod"
+
+      - name: Verify exact Go toolchain
+        shell: bash
+        run: |
+          test "$(go version | awk '{print $3}')" = go1.26.8
+          test "$(go env GOTOOLCHAIN)" = local
 
       - name: Set up ccache
         uses: hendrikmuhs/ccache-action@v1.2.23

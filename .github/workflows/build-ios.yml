@@ -8,6 +8,7 @@ on:
 
 env:
   CONAN_VERSION: 2.12.2
+  GOTOOLCHAIN: "local"
   BUILD_DIR: build
   IOS_DEPLOYMENT_TARGET: "15.6"
   IPHONEOS_DEPLOYMENT_TARGET: "15.6"
@@ -36,6 +37,11 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
+
+      - name: Verify exact Go toolchain
+        run: |
+          test "$(go version | awk '{print $3}')" = go1.26.8
+          test "$(go env GOTOOLCHAIN)" = local
 
       - name: Set up Python
         uses: actions/setup-python@v6

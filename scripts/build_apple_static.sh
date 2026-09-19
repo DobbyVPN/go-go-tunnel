@@ -3,6 +3,7 @@
 set -euo pipefail
 
 readonly platform="${1:-}"
+readonly go_version=1.26.8
 case "$platform" in
   ios)
     readonly deployment_target=15.6
@@ -10,7 +11,7 @@ case "$platform" in
     readonly system_name=iOS
     ;;
   macos)
-    readonly deployment_target=15.0
+    readonly deployment_target=12.0
     readonly sdk=macosx
     readonly system_name=Darwin
     ;;
@@ -53,6 +54,15 @@ readonly effective_rustup_home="${RUSTUP_HOME:-${HOME:?HOME is required}/.rustup
 for tool in cmake ninja conan cargo rustc go xcrun libtool strip strings; do
   command -v "$tool" >/dev/null || { echo "missing build tool: $tool" >&2; exit 2; }
 done
+[[ "${GOTOOLCHAIN:-local}" == local ]] || {
+  echo "GOTOOLCHAIN must be local for the pinned Go build" >&2
+  exit 2
+}
+export GOTOOLCHAIN=local
+[[ "$(go version | awk '{print $3}')" == "go$go_version" ]] || {
+  echo "Go version differs from the pinned Apple archive input" >&2
+  exit 1
+}
 [[ "$(conan --version)" == "Conan version $conan_version" ]] || {
   echo "Conan version differs from the pinned Apple archive input" >&2
   exit 1
@@ -93,8 +103,8 @@ add_subdirectory("../dobby_bridge" "dobby_bridge")
 fi
 
 export IPHONEOS_DEPLOYMENT_TARGET="${IPHONEOS_DEPLOYMENT_TARGET:-15.6}"
-export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-15.0}"
-[[ "$IPHONEOS_DEPLOYMENT_TARGET" == 15.6 && "$MACOSX_DEPLOYMENT_TARGET" == 15.0 ]] || {
+export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-12.0}"
+[[ "$IPHONEOS_DEPLOYMENT_TARGET" == 15.6 && "$MACOSX_DEPLOYMENT_TARGET" == 12.0 ]] || {
   echo "Apple deployment environment differs from the supported contract" >&2
   exit 2
 }

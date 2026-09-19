@@ -50,7 +50,7 @@ class AppleNativeInputDigestTests(unittest.TestCase):
         first = MODULE.digest(platform="ios", **common)
         self.assertRegex(first, r"^[0-9a-f]{64}$")
         self.assertEqual(first, MODULE.digest(platform="ios", **common))
-        self.assertNotEqual(first, MODULE.digest(platform="macos", **(common | {"deployment_target": "15.0"})))
+        self.assertNotEqual(first, MODULE.digest(platform="macos", **(common | {"deployment_target": "12.0"})))
 
     def test_dirty_or_mismatched_submodule_is_rejected(self) -> None:
         root = SCRIPT.parents[1]

@@ -9,8 +9,9 @@ on:
 env:
   CONAN_VERSION: 2.12.2
   BUILD_DIR: build
-  MACOS_DEPLOYMENT_TARGET: "15.0"
-  MACOSX_DEPLOYMENT_TARGET: "15.0"
+  GOTOOLCHAIN: "local"
+  MACOS_DEPLOYMENT_TARGET: "12.0"
+  MACOSX_DEPLOYMENT_TARGET: "12.0"
   APPLE_TOOLCHAIN_KEY: xcode-26.3-17C529
 
 jobs:
@@ -69,6 +70,11 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version-file: "go.mod"
+
+      - name: Verify exact Go toolchain
+        run: |
+          test "$(go version | awk '{print $3}')" = go1.26.8
+          test "$(go env GOTOOLCHAIN)" = local
 
       - name: Set up ccache
         uses: hendrikmuhs/ccache-action@v1.2.23
@@ -141,7 +147,7 @@ jobs:
           strip -S lib/macos/libdobby_bridge.dylib
           test "$(lipo -archs lib/macos/libdobby_bridge.dylib)" = arm64
           vtool -show-build lib/macos/libdobby_bridge.dylib | grep -Eq '^[[:space:]]*platform[[:space:]]+MACOS[[:space:]]*$'
-          vtool -show-build lib/macos/libdobby_bridge.dylib | grep -Eq '^[[:space:]]*minos[[:space:]]+15(\.0+)?[[:space:]]*$'
+          vtool -show-build lib/macos/libdobby_bridge.dylib | grep -Eq '^[[:space:]]*minos[[:space:]]+12(\.0+)?[[:space:]]*$'
           if strings -a lib/macos/libdobby_bridge.dylib | grep -E '(/Users/|/home/)'; then
             echo "macOS dynamic archive contains an unremapped local build path" >&2
             exit 1
@@ -216,6 +222,11 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version-file: "go.mod"
+
+      - name: Verify exact Go toolchain
+        run: |
+          test "$(go version | awk '{print $3}')" = go1.26.8
+          test "$(go env GOTOOLCHAIN)" = local
 
       - name: Set up ccache
         uses: hendrikmuhs/ccache-action@v1.2.23
