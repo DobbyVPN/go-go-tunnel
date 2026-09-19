@@ -100,6 +100,40 @@ class PinnedConanPreparationTests(unittest.TestCase):
 
         command.assert_called_once_with(["conan", "profile", "detect", "--force"])
 
+    def test_pins_boringssl_to_the_exact_official_github_archive(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            recipe_path = Path(temporary) / "conan" / "recipes" / "boringssl" / "conanfile.py"
+            recipe_path.parent.mkdir(parents=True)
+            recipe_path.write_text(
+                '    name = "openssl"\n'
+                f'    version = "{MODULE.BORINGSSL_VERSION}"\n'
+                + MODULE.BORINGSSL_SOURCE_METHOD,
+                encoding="utf-8",
+            )
+
+            MODULE.pin_boringssl_recipe(Path(temporary))
+
+            pinned = recipe_path.read_text(encoding="utf-8")
+            self.assertIn(MODULE.BORINGSSL_SOURCE_URL, pinned)
+            self.assertIn(f'sha256="{MODULE.BORINGSSL_SOURCE_SHA256}"', pinned)
+            self.assertIn("strip_root=True", pinned)
+            self.assertNotIn("boringssl.googlesource.com", pinned)
+
+    def test_boringssl_pin_rejects_recipe_source_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            recipe_path = Path(temporary) / "conan" / "recipes" / "boringssl" / "conanfile.py"
+            recipe_path.parent.mkdir(parents=True)
+            recipe_path.write_text(
+                '    name = "openssl"\n'
+                f'    version = "{MODULE.BORINGSSL_VERSION}"\n'
+                '    def source(self):\n'
+                '        pass\n',
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(MODULE.PreparationError, "source archive contract"):
+                MODULE.pin_boringssl_recipe(Path(temporary))
+
     def test_profile_detection_follows_custom_settings_installation(self) -> None:
         source = SCRIPT.read_text(encoding="utf-8")
         prepare = source[source.index("def prepare(trusttunnel: Path, mode: str,") :]
@@ -110,6 +144,10 @@ class PinnedConanPreparationTests(unittest.TestCase):
         self.assertLess(
             prepare.index("prepare_default_conan_profile()"),
             prepare.index("export_recipe(nlc, NLC_VERSION)"),
+        )
+        self.assertLess(
+            prepare.index("pin_boringssl_recipe(nlc)"),
+            prepare.index("replace_generated_provider(nlc, trusttunnel)"),
         )
 
     def test_pins_trusttunnel_dns_requirement_idempotently(self) -> None:

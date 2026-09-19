@@ -29,6 +29,27 @@ QUICHE_RING_017_LOCK_SHA256 = "6a188b3637389b8490c59f757fbaff1889a8fd2973e942df0
 QUICHE_RING_017_LOCK = (
     Path(__file__).resolve().parent / "pins" / "quiche-0.17.1-ring-0.17.Cargo.lock"
 )
+BORINGSSL_VERSION = "boring-2024-09-13"
+BORINGSSL_SOURCE_COMMIT = "58f3bc83230d2958bb9710bc910972c4f5d382dc"
+BORINGSSL_SOURCE_URL = (
+    "https://github.com/google/boringssl/"
+    f"archive/{BORINGSSL_SOURCE_COMMIT}.tar.gz"
+)
+BORINGSSL_SOURCE_SHA256 = "50db81f25e3ee0f90b95182fc244ceb58aefbac59456bf3f55f1c519c5584d71"
+BORINGSSL_SOURCE_METHOD = '''    def source(self):
+        get(self,
+            # 0.20240913.0 tag
+            url="https://boringssl.googlesource.com/boringssl/+archive/58f3bc83230d2958bb9710bc910972c4f5d382dc.tar.gz",
+            destination="source_subfolder")
+'''
+BORINGSSL_PINNED_SOURCE_METHOD = f'''    def source(self):
+        get(self,
+            # Exact 0.20240913.0 commit from the official GitHub mirror.
+            url="{BORINGSSL_SOURCE_URL}",
+            sha256="{BORINGSSL_SOURCE_SHA256}",
+            destination="source_subfolder",
+            strip_root=True)
+'''
 TRUSTTUNNEL_DNS_REQUIREMENT = '        self.requires("dns-libs/2.8.52@adguard/oss", transitive_headers=True)\n'
 TRUSTTUNNEL_OLD_DNS_REQUIREMENT = '        self.requires("dns-libs/2.8.51@adguard/oss", transitive_headers=True)\n'
 LOCAL_COMPILER_SETTINGS = """
@@ -329,6 +350,31 @@ def pin_quiche_recipe(nlc: Path) -> None:
     recipe_path.write_text(recipe, encoding="utf-8")
 
 
+def pin_boringssl_recipe(nlc: Path) -> None:
+    """Use the exact BoringSSL commit through a reliable pinned mirror archive."""
+    recipe_path = nlc / "conan" / "recipes" / "boringssl" / "conanfile.py"
+    if not recipe_path.is_file():
+        raise PreparationError("pinned BoringSSL recipe is missing")
+    recipe = recipe_path.read_text(encoding="utf-8")
+    if recipe.count('    name = "openssl"\n') != 1:
+        raise PreparationError("BoringSSL recipe name differs from the pinned input")
+    if recipe.count(f'    version = "{BORINGSSL_VERSION}"\n') != 1:
+        raise PreparationError("BoringSSL recipe version differs from the pinned input")
+    recipe = replace_exact(
+        recipe,
+        BORINGSSL_SOURCE_METHOD,
+        BORINGSSL_PINNED_SOURCE_METHOD,
+        "BoringSSL source archive contract",
+    )
+    if recipe.count(BORINGSSL_SOURCE_URL) != 1:
+        raise PreparationError("BoringSSL source URL is not uniquely pinned")
+    if recipe.count(f'sha256="{BORINGSSL_SOURCE_SHA256}"') != 1:
+        raise PreparationError("BoringSSL source SHA-256 is not uniquely pinned")
+    if recipe.count("strip_root=True") != 1:
+        raise PreparationError("BoringSSL source archive must strip its GitHub root")
+    recipe_path.write_text(recipe, encoding="utf-8")
+
+
 def enforce_conan_lockfile_provider(provider: Path) -> None:
     source = provider.read_text(encoding="utf-8")
     guard = '''        if("$ENV{DOBBY_CONAN_LOCKFILE}" STREQUAL "")
@@ -503,6 +549,7 @@ def prepare(trusttunnel: Path, mode: str, *, msvc_195_compat: bool = False) -> N
         pin_dns_libs_recipe(dns, nlc)
         pin_native_libs_common_recipe(nlc, provider_patch=provider_patch)
         pin_quiche_recipe(nlc)
+        pin_boringssl_recipe(nlc)
         replace_generated_provider(nlc, trusttunnel)
         prepare_default_conan_profile()
         exported = {export_recipe(nlc, NLC_VERSION)}
