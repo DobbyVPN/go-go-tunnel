@@ -108,7 +108,7 @@ LOCAL_LOCKED_RECIPE_REVISIONS = frozenset(
         "nghttp2/1.56.0@adguard/oss#227b6065ed31c973828dff969ed60eac",
         "nghttp3/1.0.0@adguard/oss#eebebee4f2e7e2f96ff6604c29ec9232",
         "ngtcp2/1.0.1@adguard/oss#8df07ca7aeeba2cb52adad658ae8b357",
-        "openssl/boring-2024-09-13@adguard/oss#325eeda72477e4c1d1a18d607c8704c0",
+        "openssl/boring-2024-09-13@adguard/oss#9def45041ebc3900a569eef7ee9c48ad",
         "pcre2/10.37@adguard/oss#73864ed3c4d8e34486bc484dc3e133e4",
         "quiche/0.17.1@adguard/oss#2ba3cfb4193aed42dcfd29b7396ae7f0",
         "tldregistry/2022-12-26@adguard/oss#45b0964264aaf68f25514d9fa3f9558a",
