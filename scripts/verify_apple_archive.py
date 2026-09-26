@@ -88,6 +88,11 @@ def parse_otool(output: str) -> list[MemberTarget]:
     return records
 
 
+def platform_mismatches(records: list[MemberTarget], platform: str) -> list[MemberTarget]:
+    expected = PLATFORMS[platform]
+    return [record for record in records if record.platform != expected]
+
+
 def parse_archive_members(output: str) -> list[str]:
     members = [
         line.strip()
@@ -177,10 +182,14 @@ def verify(
         raise VerificationError(
             "deployment metadata does not cover the exact archive object-member table"
         )
-    wrong_platform = [record for record in records if record.platform != expected]
+    wrong_platform = platform_mismatches(records, platform)
     too_new = [record for record in records if record.minimum > limit]
     if wrong_platform:
-        raise VerificationError("archive contains an object for another Apple platform")
+        first = wrong_platform[0]
+        raise VerificationError(
+            "archive contains an object for another Apple platform "
+            f"(member={first.member} platform={first.platform} expected={expected})"
+        )
     if too_new:
         first = too_new[0]
         observed = ".".join(str(piece) for piece in first.minimum)

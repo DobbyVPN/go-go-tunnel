@@ -26,6 +26,7 @@ from verify_apple_archive import (
     PLATFORMS,
     VerificationError,
     parse_otool,
+    platform_mismatches,
     verify,
     version,
 )
@@ -180,10 +181,14 @@ def deployment_records(archive: Path) -> list[MemberTarget]:
     return parse_otool(tool_output(["xcrun", "otool", "-l", str(archive)]))
 
 
-def check_platform(records: list[MemberTarget], platform: str) -> None:
-    expected = PLATFORMS[platform]
-    if any(record.platform != expected for record in records):
-        raise PruningError("archive contains a member for another Apple platform")
+def check_platform(records: list[MemberTarget], platform: str, source: Path) -> None:
+    mismatches = platform_mismatches(records, platform)
+    if mismatches:
+        first = mismatches[0]
+        raise PruningError(
+            f"{source} contains a member for another Apple platform "
+            f"(member={first.member} platform={first.platform} expected={PLATFORMS[platform]})"
+        )
 
 
 def prune(
@@ -197,7 +202,7 @@ def prune(
         raise PruningError("compiler-builtins rlib differs from the immutable expected input")
 
     target_records = deployment_records(archive)
-    check_platform(target_records, platform)
+    check_platform(target_records, platform, archive)
     limit = version(maximum)
     target_too_new = members_above(target_records, limit)
     if not target_too_new:
@@ -209,7 +214,7 @@ def prune(
     ) as temporary:
         temporary_path = Path(temporary)
         reference_records = deployment_records(compiler_builtins)
-        check_platform(reference_records, platform)
+        check_platform(reference_records, platform, compiler_builtins)
         reference_too_new = set(members_above(reference_records, limit))
         if not set(target_too_new).issubset(reference_too_new):
             raise PruningError("too-new members are not a subset of pinned compiler-builtins")
@@ -269,7 +274,7 @@ def main() -> int:
         VerificationError,
         subprocess.CalledProcessError,
     ) as error:
-        print(f"error: Apple compiler-builtins pruning failed: {error}")
+        print(f"error: Apple compiler-builtins pruning failed for {args.archive}: {error}")
         return 1
     print(f"Apple compiler-builtins pruning verified removed_members={removed}")
     return 0

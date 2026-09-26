@@ -194,9 +194,54 @@ while IFS= read -r library; do static_libraries+=("$library"); done < <(
     -not -name 'libdobby_bridge-merged.a' \
     -print | sort
 )
+
+conan_archive_matches_target_platform() {
+  python3 - "$root/scripts" "$1" "$platform" <<'PY'
+import subprocess
+import sys
+from pathlib import Path
+
+sys.path.insert(0, sys.argv[1])
+from verify_apple_archive import PLATFORMS, parse_otool, platform_mismatches
+
+archive = Path(sys.argv[2])
+platform = sys.argv[3]
+try:
+    output = subprocess.run(
+        ["xcrun", "otool", "-l", str(archive)],
+        check=True,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        text=True,
+    ).stdout
+    records = parse_otool(output)
+except (OSError, ValueError, subprocess.CalledProcessError) as error:
+    print(f"error: cannot inspect Conan archive platform for {archive}: {error}", file=sys.stderr)
+    raise SystemExit(2)
+
+mismatches = platform_mismatches(records, platform)
+if mismatches:
+    first = mismatches[0]
+    print(
+        f"Skipping Conan archive for another Apple platform: {archive} "
+        f"member={first.member} platform={first.platform} expected={PLATFORMS[platform]}",
+        file=sys.stderr,
+    )
+    raise SystemExit(1)
+PY
+}
+
 while IFS= read -r library; do
-  if xcrun lipo -info "$library" 2>/dev/null | grep -q "$architecture"; then
+  if ! xcrun lipo -info "$library" 2>/dev/null | grep -q "$architecture"; then
+    continue
+  fi
+  if conan_archive_matches_target_platform "$library"; then
     static_libraries+=("$library")
+  else
+    platform_check_status=$?
+    if [[ "$platform_check_status" -ne 1 ]]; then
+      exit "$platform_check_status"
+    fi
   fi
 done < <(find "$CONAN_HOME/p" -type f -name '*.a' -print | sort)
 (( ${#static_libraries[@]} > 0 )) || { echo "no $architecture static libraries found" >&2; exit 1; }
@@ -240,6 +285,7 @@ if [[ "$platform" == ios || "$platform" == ios-simulator ]]; then
     input_number=$((input_number + 1))
     original_digest="$(shasum -a 256 "$library" | awk '{print $1}')"
     staged="$sanitized_directory/input-$input_number.a"
+    echo "Checking Apple static archive input: $library"
     cp -p "$library" "$staged"
     python3 "$root/scripts/prune_apple_compiler_builtins.py" \
       --archive "$staged" \

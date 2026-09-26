@@ -61,6 +61,11 @@ class AppleStaticBuildContractTests(unittest.TestCase):
         self.assertIn('DOBBY_CONAN_LOCKFILE is required', self.source)
         self.assertIn('Apple build requires the locked Conan provider', self.source)
 
+    def test_conan_archives_are_filtered_by_apple_platform(self) -> None:
+        self.assertIn('conan_archive_matches_target_platform "$library"', self.source)
+        self.assertIn('Skipping Conan archive for another Apple platform:', self.source)
+        self.assertIn('platform_mismatches(records, platform)', self.source)
+
     def test_simulator_build_uses_simulator_sdk_and_build_tags(self) -> None:
         for required in (
             "ios-simulator-arm64)",

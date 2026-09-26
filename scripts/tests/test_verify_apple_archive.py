@@ -116,6 +116,11 @@ class AppleArchiveVerificationTests(unittest.TestCase):
         with self.assertRaisesRegex(MODULE.VerificationError, "another Apple platform"):
             MODULE.verify(records, "ios", "15.6")
 
+    def test_reports_platform_mismatches_for_archive_selection(self) -> None:
+        records = MODULE.parse_otool(metadata(1, "15.0", "host.o") + metadata(7, "15.6", "simulator.o"))
+        mismatches = MODULE.platform_mismatches(records, "ios-simulator")
+        self.assertEqual([(record.member, record.platform) for record in mismatches], [("host.o", "1")])
+
     def test_parses_legacy_minimum_command(self) -> None:
         output = """Archive : archive.a
 archive.a(legacy.o):
