@@ -71,6 +71,16 @@ class AppleStaticBuildContractTests(unittest.TestCase):
         ):
             self.assertIn(required, self.source)
 
+    def test_simulator_consumer_link_uses_the_current_arch_archive_and_restores_existing(self) -> None:
+        for required in (
+            'simulator_bridge_link="$root/lib/ios-simulator/libdobby_bridge.a"',
+            'simulator_bridge_backup="$build/libdobby_bridge-before-consumer.a"',
+            'ln -s "$output" "$simulator_bridge_link"',
+            "restore_simulator_consumer_bridge()",
+            'mv "$simulator_bridge_backup" "$simulator_bridge_link"',
+        ):
+            self.assertIn(required, self.source)
+
     def test_final_archive_verification_precedes_consumer_link(self) -> None:
         verifier = self.source.index("scripts/verify_apple_archive.py")
         privacy_scan = self.source.index("Apple archive contains an unremapped local build path")

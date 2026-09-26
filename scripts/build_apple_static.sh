@@ -278,6 +278,31 @@ if grep -F \
   exit 1
 fi
 
+if [[ "$platform" == ios-simulator ]]; then
+  readonly simulator_bridge_link="$root/lib/ios-simulator/libdobby_bridge.a"
+  readonly simulator_bridge_backup="$build/libdobby_bridge-before-consumer.a"
+  simulator_bridge_link_created=0
+  simulator_bridge_backup_created=0
+  restore_simulator_consumer_bridge() {
+    local status=$?
+    trap - EXIT
+    if [[ "$simulator_bridge_link_created" == 1 ]]; then
+      rm -f "$simulator_bridge_link" || status=$?
+    fi
+    if [[ "$simulator_bridge_backup_created" == 1 ]]; then
+      mv "$simulator_bridge_backup" "$simulator_bridge_link" || status=$?
+    fi
+    exit "$status"
+  }
+  trap restore_simulator_consumer_bridge EXIT
+  if [[ -e "$simulator_bridge_link" || -L "$simulator_bridge_link" ]]; then
+    mv "$simulator_bridge_link" "$simulator_bridge_backup"
+    simulator_bridge_backup_created=1
+  fi
+  ln -s "$output" "$simulator_bridge_link"
+  simulator_bridge_link_created=1
+fi
+
 if [[ "$platform" == ios || "$platform" == ios-simulator ]]; then
   (
     cd "$root/examples"
