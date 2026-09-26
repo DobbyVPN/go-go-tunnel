@@ -68,8 +68,10 @@ class AppleStaticBuildContractTests(unittest.TestCase):
 
     def test_conan_archives_are_filtered_by_apple_platform(self) -> None:
         self.assertIn('conan_archive_matches_target_platform "$library"', self.source)
+        self.assertIn('parse_otool(output, sys.argv[4])', self.source)
         self.assertIn('Skipping Conan archive for another Apple platform:', self.source)
         self.assertIn('platform_mismatches(records, platform)', self.source)
+        self.assertGreaterEqual(self.source.count('--architecture "$architecture"'), 2)
 
     def test_simulator_build_uses_simulator_sdk_and_build_tags(self) -> None:
         for required in (

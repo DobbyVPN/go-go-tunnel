@@ -177,8 +177,8 @@ def tool_output(arguments: list[str]) -> str:
     return completed.stdout
 
 
-def deployment_records(archive: Path) -> list[MemberTarget]:
-    return parse_otool(tool_output(["xcrun", "otool", "-l", str(archive)]))
+def deployment_records(archive: Path, architecture: str) -> list[MemberTarget]:
+    return parse_otool(tool_output(["xcrun", "otool", "-l", str(archive)]), architecture)
 
 
 def check_platform(records: list[MemberTarget], platform: str, source: Path) -> None:
@@ -196,12 +196,13 @@ def prune(
     compiler_builtins: Path,
     expected_compiler_builtins_sha256: str,
     platform: str,
+    architecture: str,
     maximum: str,
 ) -> int:
     if hashlib.sha256(compiler_builtins.read_bytes()).hexdigest() != expected_compiler_builtins_sha256:
         raise PruningError("compiler-builtins rlib differs from the immutable expected input")
 
-    target_records = deployment_records(archive)
+    target_records = deployment_records(archive, architecture)
     check_platform(target_records, platform, archive)
     limit = version(maximum)
     target_too_new = members_above(target_records, limit)
@@ -213,7 +214,7 @@ def prune(
         prefix="dobby-compiler-builtins-", dir=archive.parent
     ) as temporary:
         temporary_path = Path(temporary)
-        reference_records = deployment_records(compiler_builtins)
+        reference_records = deployment_records(compiler_builtins, architecture)
         check_platform(reference_records, platform, compiler_builtins)
         reference_too_new = set(members_above(reference_records, limit))
         if not set(target_too_new).issubset(reference_too_new):
@@ -242,7 +243,7 @@ def prune(
             check=True,
             stdin=subprocess.DEVNULL,
         )
-        retained_records = deployment_records(candidate)
+        retained_records = deployment_records(candidate, architecture)
         verify(retained_records, platform, maximum)
         os.replace(candidate, archive)
     return sum(target_too_new.values())
@@ -254,6 +255,7 @@ def main() -> int:
     parser.add_argument("--compiler-builtins", required=True, type=Path)
     parser.add_argument("--expected-compiler-builtins-sha256", required=True)
     parser.add_argument("--platform", required=True, choices=sorted(PLATFORMS))
+    parser.add_argument("--architecture", required=True, choices=("arm64", "x86_64"))
     parser.add_argument("--maximum-deployment-target", required=True)
     args = parser.parse_args()
     try:
@@ -266,6 +268,7 @@ def main() -> int:
             compiler_builtins,
             args.expected_compiler_builtins_sha256,
             args.platform,
+            args.architecture,
             args.maximum_deployment_target,
         )
     except (

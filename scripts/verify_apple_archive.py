@@ -45,7 +45,7 @@ def version(value: str) -> tuple[int, int, int]:
     return tuple((pieces + [0, 0])[:3])  # type: ignore[return-value]
 
 
-def parse_otool(output: str) -> list[MemberTarget]:
+def parse_otool(output: str, architecture: str | None = None) -> list[MemberTarget]:
     records: list[MemberTarget] = []
     members: list[str] = []
     archive: str | None = None
@@ -75,6 +75,12 @@ def parse_otool(output: str) -> list[MemberTarget]:
             if member is None:
                 raise VerificationError("incomplete legacy deployment metadata")
             inferred = "2" if command == "LC_VERSION_MIN_IPHONEOS" else "1"
+            # The legacy iOS load command does not distinguish device from
+            # Simulator. x86_64 is only used for the iOS Simulator, so retain
+            # that target information when reading pre-LC_BUILD_VERSION Rust
+            # standard-library objects.
+            if command == "LC_VERSION_MIN_IPHONEOS" and architecture == "x86_64":
+                inferred = "7"
             records.append(MemberTarget(member, inferred, version(line.split()[1])))
             command = platform = None
     if not members:
@@ -207,6 +213,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--archive", required=True, type=Path)
     parser.add_argument("--platform", required=True, choices=sorted(PLATFORMS))
+    parser.add_argument("--architecture", required=True, choices=("arm64", "x86_64"))
     parser.add_argument("--maximum-deployment-target", required=True)
     parser.add_argument("--canonicalize-metadata", action="store_true")
     args = parser.parse_args()
@@ -231,7 +238,7 @@ def main() -> int:
             text=True,
             stdout=subprocess.PIPE,
         )
-        records = parse_otool(completed.stdout)
+        records = parse_otool(completed.stdout, args.architecture)
         members = parse_archive_members(member_table.stdout)
         verify(
             records,

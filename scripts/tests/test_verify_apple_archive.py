@@ -133,6 +133,26 @@ Load command 1
         records = MODULE.parse_otool(output)
         MODULE.verify(records, "macos", "12.0")
 
+    def test_legacy_ios_command_uses_x86_architecture_to_identify_simulator(self) -> None:
+        output = """Archive : archive.a
+archive.a(legacy-ios.o):
+Load command 1
+      cmd LC_VERSION_MIN_IPHONEOS
+  cmdsize 16
+  version 10.0
+      sdk 15.5
+"""
+        simulator_records = MODULE.parse_otool(output, "x86_64")
+        MODULE.verify(simulator_records, "ios-simulator", "15.6")
+        device_records = MODULE.parse_otool(output, "arm64")
+        with self.assertRaisesRegex(MODULE.VerificationError, "another Apple platform"):
+            MODULE.verify(device_records, "ios-simulator", "15.6")
+
+    def test_explicit_device_platform_is_not_reinterpreted_for_x86_simulator(self) -> None:
+        records = MODULE.parse_otool(metadata(2, "15.6"), "x86_64")
+        with self.assertRaisesRegex(MODULE.VerificationError, "another Apple platform"):
+            MODULE.verify(records, "ios-simulator", "15.6")
+
     def test_rejects_output_without_member_targets(self) -> None:
         with self.assertRaises(MODULE.VerificationError):
             MODULE.parse_otool("Archive : archive.a\n")

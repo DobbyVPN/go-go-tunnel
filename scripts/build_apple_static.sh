@@ -198,7 +198,7 @@ while IFS= read -r library; do static_libraries+=("$library"); done < <(
 )
 
 conan_archive_matches_target_platform() {
-  python3 - "$root/scripts" "$1" "$platform" <<'PY'
+  python3 - "$root/scripts" "$1" "$platform" "$architecture" <<'PY'
 import subprocess
 import sys
 from pathlib import Path
@@ -216,7 +216,7 @@ try:
         stdout=subprocess.PIPE,
         text=True,
     ).stdout
-    records = parse_otool(output)
+    records = parse_otool(output, sys.argv[4])
 except (OSError, ValueError, subprocess.CalledProcessError) as error:
     print(f"error: cannot inspect Conan archive platform for {archive}: {error}", file=sys.stderr)
     raise SystemExit(2)
@@ -294,6 +294,7 @@ if [[ "$platform" == ios || "$platform" == ios-simulator ]]; then
       --compiler-builtins "${compiler_builtins[0]}" \
       --expected-compiler-builtins-sha256 "$expected_compiler_builtins_sha256" \
       --platform "$platform" \
+      --architecture "$architecture" \
       --maximum-deployment-target "$deployment_target"
     [[ "$(shasum -a 256 "$library" | awk '{print $1}')" == "$original_digest" ]] || {
       echo "Apple input sanitizer modified a Conan/build-cache archive" >&2
@@ -311,6 +312,7 @@ install -m 0644 "$merged" "$output"
 python3 "$root/scripts/verify_apple_archive.py" \
   --archive "$output" \
   --platform "$platform" \
+  --architecture "$architecture" \
   --maximum-deployment-target "$deployment_target" \
   --canonicalize-metadata
 readonly strings_inventory="$build/archive-strings.txt"
