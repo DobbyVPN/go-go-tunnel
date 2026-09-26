@@ -14,6 +14,11 @@ class AppleStaticBuildContractTests(unittest.TestCase):
         self.assertGreaterEqual(self.source.count("-isysroot $(xcrun --sdk"), 2)
         self.assertIn('sdk=iphonesimulator', self.source)
 
+    def test_native_build_exports_selected_sdk_to_rust_and_conan(self) -> None:
+        self.assertIn('readonly sdkroot="$(xcrun --sdk "$sdk" --show-sdk-path)"', self.source)
+        self.assertIn('export SDKROOT="$sdkroot"', self.source)
+        self.assertIn('"-DCMAKE_OSX_SYSROOT=$sdkroot"', self.source)
+
     def test_native_compilers_remap_source_and_dependency_paths(self) -> None:
         for required in (
             "-ffile-prefix-map=$root=/dobbyvpn/source",

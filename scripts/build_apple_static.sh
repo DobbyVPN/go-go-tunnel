@@ -147,6 +147,8 @@ export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-12.0}"
   echo "Apple deployment environment differs from the supported contract" >&2
   exit 2
 }
+readonly sdkroot="$(xcrun --sdk "$sdk" --show-sdk-path)"
+export SDKROOT="$sdkroot"
 prefix_maps=(
   "-ffile-prefix-map=$root=/dobbyvpn/source"
   "-ffile-prefix-map=$CONAN_HOME=/dobbyvpn/conan"
@@ -168,7 +170,7 @@ configure=(
   -DCMAKE_BUILD_TYPE=Release
   "-DCMAKE_OSX_ARCHITECTURES=$architecture"
   -DCMAKE_OSX_DEPLOYMENT_TARGET="$deployment_target"
-  -DCMAKE_OSX_SYSROOT="$(xcrun --sdk "$sdk" --show-sdk-path)"
+  "-DCMAKE_OSX_SYSROOT=$sdkroot"
   -DCMAKE_C_COMPILER="$(xcrun --sdk "$sdk" --find clang)"
   -DCMAKE_CXX_COMPILER="$(xcrun --sdk "$sdk" --find clang++)"
   "-DCMAKE_C_FLAGS=${prefix_flags% }"
