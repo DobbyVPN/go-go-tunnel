@@ -159,6 +159,11 @@ class WorkflowContractTests(unittest.TestCase):
         ):
             self.assertIn(required, source)
 
+    def test_android_static_conan_cache_is_separate_per_abi(self) -> None:
+        source = (WORKFLOWS / "build-android.yml").read_text(encoding="utf-8")
+        expected_key = "android-static-${{ matrix.android_abi }}-${{ runner.arch }}-"
+        self.assertEqual(source.count(expected_key), 2)
+
     def test_windows_declares_the_exact_static_msvc_runtime(self) -> None:
         source = (WORKFLOWS / "build-windows.yml").read_text(encoding="utf-8")
         self.assertEqual(
