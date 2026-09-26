@@ -27,7 +27,8 @@ The project uses GitHub Actions (`.github/workflows`) to provide automated build
 Build support is split into **Dynamic** and **Static** libraries:
 
 - **Dynamic Builds**: Windows, Linux, macOS, Android
-- **Static Builds**: macOS, Android, iOS
+- **Static Builds**: macOS, Android arm64/x86_64, iOS device arm64 and Simulator
+  arm64/x86_64
 
 ### Platform Guidelines
 

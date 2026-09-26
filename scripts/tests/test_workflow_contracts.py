@@ -149,6 +149,16 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertNotIn("go-version: '1.25'", source)
         self.assertIn('GOTOOLCHAIN: "local"', source)
 
+    def test_android_static_workflow_builds_both_bridge_abis(self) -> None:
+        source = (WORKFLOWS / "build-android.yml").read_text(encoding="utf-8")
+        for required in (
+            "android_abi: [arm64-v8a, x86_64]",
+            "x86_64-linux-android",
+            'go build -tags static -v -o "examples_android_${ANDROID_ABI}"',
+            'name: libdobby_bridge-android-${{ env.ANDROID_ABI }}-static',
+        ):
+            self.assertIn(required, source)
+
     def test_windows_declares_the_exact_static_msvc_runtime(self) -> None:
         source = (WORKFLOWS / "build-windows.yml").read_text(encoding="utf-8")
         self.assertEqual(
@@ -276,6 +286,10 @@ class WorkflowContractTests(unittest.TestCase):
             'gh run view "$run_id" --json workflowName',
             "lib/static-libraries.provenance.json",
             "verify_single_archive()",
+            "libdobby_bridge-android-x86_64-static",
+            "libdobby_bridge-ios-simulator",
+            'android_x86_64: {run_id: $android_run_id, sha256: $android_x86_64_sha256}',
+            'ios_simulator: {run_id: $ios_run_id, sha256: $ios_simulator_sha256}',
             'test "$entries" = "libdobby_bridge.a"',
             'test ! -L "$expected"',
             'git fetch origin "+refs/heads/$TARGET_BRANCH:refs/remotes/origin/$TARGET_BRANCH"',
@@ -285,6 +299,18 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertNotIn("get_latest_run", source)
         self.assertNotIn("|| echo", source)
         self.assertEqual(source.count("set -euo pipefail"), 3)
+
+    def test_ios_workflow_builds_and_uploads_universal_simulator_bridge(self) -> None:
+        source = (WORKFLOWS / "build-ios.yml").read_text(encoding="utf-8")
+        for required in (
+            "aarch64-apple-ios-sim",
+            "x86_64-apple-ios",
+            "scripts/build_apple_static.sh ios-simulator-arm64",
+            "scripts/build_apple_static.sh ios-simulator-amd64",
+            "lib/ios-simulator/libdobby_bridge.a",
+            "name: libdobby_bridge-ios-simulator",
+        ):
+            self.assertIn(required, source)
 
 
 if __name__ == "__main__":

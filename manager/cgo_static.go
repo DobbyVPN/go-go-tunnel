@@ -8,9 +8,6 @@ package manager
 //
 // Link against the bundled static library (.a) containing all dependencies.
 
-// iOS
-#cgo ios LDFLAGS: ${SRCDIR}/../lib/ios/libdobby_bridge.a -framework CoreFoundation -framework Security -framework Foundation -framework Network -framework NetworkExtension -lc++
-
 // macOS
 #cgo darwin,!ios LDFLAGS: ${SRCDIR}/../lib/macos/libdobby_bridge.a -framework CoreFoundation -framework Security -framework Foundation -framework Network -framework NetworkExtension -framework SystemConfiguration -lc++
 

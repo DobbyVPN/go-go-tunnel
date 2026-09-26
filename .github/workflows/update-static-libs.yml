@@ -63,13 +63,19 @@ jobs:
         run: |
           set -euo pipefail
           stage="$RUNNER_TEMP/static-libraries"
-          mkdir -p "$stage/android" "$stage/ios" "$stage/macos"
+          mkdir -p "$stage/android-arm64" "$stage/android-x86_64" "$stage/ios-device" "$stage/ios-simulator" "$stage/macos"
           gh run download "$ANDROID_RUN_ID" \
             --name libdobby_bridge-android-arm64-v8a-static \
-            --dir "$stage/android"
+            --dir "$stage/android-arm64"
+          gh run download "$ANDROID_RUN_ID" \
+            --name libdobby_bridge-android-x86_64-static \
+            --dir "$stage/android-x86_64"
           gh run download "$IOS_RUN_ID" \
             --name libdobby_bridge-ios-arm64 \
-            --dir "$stage/ios"
+            --dir "$stage/ios-device"
+          gh run download "$IOS_RUN_ID" \
+            --name libdobby_bridge-ios-simulator \
+            --dir "$stage/ios-simulator"
           gh run download "$MACOS_RUN_ID" \
             --name libdobby_bridge-macos-arm64-static \
             --dir "$stage/macos"
@@ -83,27 +89,37 @@ jobs:
             test -f "$expected"
             test ! -L "$expected"
           }
-          verify_single_archive "$stage/android"
-          verify_single_archive "$stage/ios"
+          verify_single_archive "$stage/android-arm64"
+          verify_single_archive "$stage/android-x86_64"
+          verify_single_archive "$stage/ios-device"
+          verify_single_archive "$stage/ios-simulator"
           verify_single_archive "$stage/macos"
-          install -D -m 0644 "$stage/android/libdobby_bridge.a" lib/android/arm64-v8a/libdobby_bridge.a
-          install -D -m 0644 "$stage/ios/libdobby_bridge.a" lib/ios/libdobby_bridge.a
+          install -D -m 0644 "$stage/android-arm64/libdobby_bridge.a" lib/android/arm64-v8a/libdobby_bridge.a
+          install -D -m 0644 "$stage/android-x86_64/libdobby_bridge.a" lib/android/x86_64/libdobby_bridge.a
+          install -D -m 0644 "$stage/ios-device/libdobby_bridge.a" lib/ios/libdobby_bridge.a
+          install -D -m 0644 "$stage/ios-simulator/libdobby_bridge.a" lib/ios-simulator/libdobby_bridge.a
           install -D -m 0644 "$stage/macos/libdobby_bridge.a" lib/macos/libdobby_bridge.a
 
           android_sha="$(sha256sum lib/android/arm64-v8a/libdobby_bridge.a | awk '{print $1}')"
+          android_x86_64_sha="$(sha256sum lib/android/x86_64/libdobby_bridge.a | awk '{print $1}')"
           ios_sha="$(sha256sum lib/ios/libdobby_bridge.a | awk '{print $1}')"
+          ios_simulator_sha="$(sha256sum lib/ios-simulator/libdobby_bridge.a | awk '{print $1}')"
           macos_sha="$(sha256sum lib/macos/libdobby_bridge.a | awk '{print $1}')"
           jq -n \
             --arg source_sha "$SOURCE_SHA" \
             --arg android_run_id "$ANDROID_RUN_ID" \
             --arg android_sha256 "$android_sha" \
+            --arg android_x86_64_sha256 "$android_x86_64_sha" \
             --arg ios_run_id "$IOS_RUN_ID" \
             --arg ios_sha256 "$ios_sha" \
+            --arg ios_simulator_sha256 "$ios_simulator_sha" \
             --arg macos_run_id "$MACOS_RUN_ID" \
             --arg macos_sha256 "$macos_sha" \
-            '{schema: 1, source_sha: $source_sha, artifacts: {
+            '{schema: 2, source_sha: $source_sha, artifacts: {
               android: {run_id: $android_run_id, sha256: $android_sha256},
+              android_x86_64: {run_id: $android_run_id, sha256: $android_x86_64_sha256},
               ios: {run_id: $ios_run_id, sha256: $ios_sha256},
+              ios_simulator: {run_id: $ios_run_id, sha256: $ios_simulator_sha256},
               macos: {run_id: $macos_run_id, sha256: $macos_sha256}
             }}' > lib/static-libraries.provenance.json
 
@@ -114,7 +130,9 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add \
             lib/android/arm64-v8a/libdobby_bridge.a \
+            lib/android/x86_64/libdobby_bridge.a \
             lib/ios/libdobby_bridge.a \
+            lib/ios-simulator/libdobby_bridge.a \
             lib/macos/libdobby_bridge.a \
             lib/static-libraries.provenance.json
 

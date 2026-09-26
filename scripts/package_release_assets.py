@@ -59,8 +59,18 @@ ASSETS = (
         (("libdobby_bridge.a", "libdobby_bridge.a"),),
     ),
     ReleaseAsset(
+        "libdobby_bridge-android-x86_64-static.zip",
+        "android-x86_64-static",
+        (("libdobby_bridge.a", "libdobby_bridge.a"),),
+    ),
+    ReleaseAsset(
         "libdobby_bridge-ios-arm64.zip",
         "ios",
+        (("libdobby_bridge.a", "libdobby_bridge.a"),),
+    ),
+    ReleaseAsset(
+        "libdobby_bridge-ios-simulator.zip",
+        "ios-simulator",
         (("libdobby_bridge.a", "libdobby_bridge.a"),),
     ),
     ReleaseAsset(

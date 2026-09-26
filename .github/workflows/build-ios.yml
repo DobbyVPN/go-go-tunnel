@@ -72,7 +72,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: "1.85.0"
-          targets: aarch64-apple-ios
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
 
       - name: Set up ccache
         uses: hendrikmuhs/ccache-action@v1.2.23
@@ -114,12 +114,50 @@ jobs:
       - name: Build and verify iOS bridge
         run: scripts/build_apple_static.sh ios
 
-      - name: Save conan cache
+      - name: Save iOS device Conan cache
         uses: actions/cache/save@v5
         if: steps.conan-cache.outputs.cache-hit != 'true'
         with:
           path: ${{ runner.temp }}/dobby-conan-ios
           key: ios-${{ runner.arch }}-${{ steps.native-input.outputs.digest }}-conan
+
+      - name: Restore isolated iOS Simulator Conan cache
+        uses: actions/cache@v5
+        id: simulator-conan-cache
+        with:
+          path: ${{ runner.temp }}/dobby-conan-ios-simulator
+          key: ios-simulator-${{ runner.arch }}-${{ steps.native-input.outputs.digest }}-conan
+
+      - name: Select isolated iOS Simulator Conan home
+        run: echo "CONAN_HOME=$RUNNER_TEMP/dobby-conan-ios-simulator" >> "$GITHUB_ENV"
+
+      - name: Prepare pinned Conan recipes and Simulator provider
+        run: python3 scripts/prepare_pinned_conan.py --trusttunnel TrustTunnelClient --mode locked
+
+      - name: Build and verify iOS Simulator bridge architectures
+        run: |
+          scripts/build_apple_static.sh ios-simulator-arm64
+          scripts/build_apple_static.sh ios-simulator-amd64
+          mkdir -p lib/ios-simulator
+          xcrun lipo -create \
+            lib/ios-simulator/arm64/libdobby_bridge.a \
+            lib/ios-simulator/amd64/libdobby_bridge.a \
+            -output lib/ios-simulator/libdobby_bridge.a
+          file lib/ios-simulator/libdobby_bridge.a
+          test "$(xcrun lipo -archs lib/ios-simulator/libdobby_bridge.a | tr ' ' '\n' | LC_ALL=C sort | tr '\n' ' ')" = "arm64 x86_64 "
+
+      - name: Save iOS Simulator Conan cache
+        uses: actions/cache/save@v5
+        if: steps.simulator-conan-cache.outputs.cache-hit != 'true'
+        with:
+          path: ${{ runner.temp }}/dobby-conan-ios-simulator
+          key: ios-simulator-${{ runner.arch }}-${{ steps.native-input.outputs.digest }}-conan
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: libdobby_bridge-ios-simulator
+          path: lib/ios-simulator/libdobby_bridge.a
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7

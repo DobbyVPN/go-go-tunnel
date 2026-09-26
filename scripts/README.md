@@ -1,12 +1,14 @@
 # Apple static bridge build
 
-The iOS and macOS static archives are built from public repository inputs only.
+The iOS device, iOS Simulator, and macOS static archives are built from public
+repository inputs only.
 The supported build contract is:
 
 - Xcode 26.3 (`17C529`);
 - Conan 2.12.2 in a new, absolute `CONAN_HOME` for each platform;
 - Rust 1.85.0 for the Apple Rust targets;
-- iOS arm64 with a maximum deployment target of 15.6;
+- iOS device arm64 and Simulator arm64/x86_64 with a maximum deployment target
+  of 15.6;
 - macOS arm64 with a maximum deployment target of 12.0.
 
 All Go builds use Go 1.26.8 with `GOTOOLCHAIN=local`; the build fails closed
@@ -21,6 +23,11 @@ export DOBBY_CONAN_LOCKFILE="$PWD/scripts/pins/conan/apple-ios-arm64.lock"
 python3 scripts/prepare_pinned_conan.py --trusttunnel TrustTunnelClient --mode locked
 scripts/build_apple_static.sh ios
 ```
+
+For the Simulator bridge, use a separate `CONAN_HOME`, prepare the same iOS
+lock, then run `scripts/build_apple_static.sh ios-simulator-arm64` and
+`scripts/build_apple_static.sh ios-simulator-amd64`. The hosted workflow
+combines these verified slices into the universal archive used by gomobile.
 
 Use another new cache and replace `ios` with `macos` for the macOS archive.
 Replace the lock path with `scripts/pins/conan/apple-macos-arm64.lock` for
@@ -124,8 +131,9 @@ Remove the exception when the pinned Conan implementation fully supports MSVC
 
 The `Update Static Libraries` workflow accepts one full source SHA and explicit
 successful Android, iOS, and macOS run IDs. It verifies that every run belongs
-to the named workflow at that exact SHA, stages all three artifacts
-fail-closed, records their public SHA-256 values and run IDs in
+to the named workflow at that exact SHA, stages the Android arm64 and x86_64,
+iOS device and universal Simulator, and macOS artifacts fail-closed, records
+their public SHA-256 values and run IDs in
 `lib/static-libraries.provenance.json`, and refuses to push if the target branch
 has moved. After its binary-only commit, run the platform workflows again at
 the resulting exact head before tagging a module release.
@@ -137,7 +145,7 @@ one full source SHA, and the five successful Android, iOS, Linux, macOS, and
 Windows workflow run IDs. It refuses a moved `main`, a mismatched run SHA or
 workflow name, an existing tag or release, and any unexpected artifact member.
 
-It downloads exactly the seven platform artifacts, creates deterministic ZIP
+It downloads exactly the nine platform artifacts, creates deterministic ZIP
 files (fixed timestamp, mode, compression, and member order), and publishes a
 `release-assets.manifest.json` with the source SHA, run IDs, member digests,
 and archive digests. The release gate also proves that the checked-in static

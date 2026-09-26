@@ -11,7 +11,7 @@ import re
 import subprocess
 
 
-PLATFORMS = {"macos": "1", "ios": "2"}
+PLATFORMS = {"macos": "1", "ios": "2", "ios-simulator": "7"}
 VERSION = re.compile(r"^(0|[1-9][0-9]*)(?:\.(0|[1-9][0-9]*)){0,2}$")
 ARCHIVE_INDEX_MEMBERS = frozenset(
     {"/", "//", "/SYM64/", "__.SYMDEF", "__.SYMDEF SORTED"}

@@ -102,6 +102,10 @@ class AppleArchiveVerificationTests(unittest.TestCase):
         records = MODULE.parse_otool(metadata(2, "13.0", "a.o") + metadata(2, "15.6", "b.o"))
         MODULE.verify(records, "ios", "15.6")
 
+    def test_accepts_simulator_platform_metadata(self) -> None:
+        records = MODULE.parse_otool(metadata(7, "15.6"))
+        MODULE.verify(records, "ios-simulator", "15.6")
+
     def test_rejects_member_above_limit(self) -> None:
         records = MODULE.parse_otool(metadata(2, "18.5"))
         with self.assertRaisesRegex(MODULE.VerificationError, "above supported"):

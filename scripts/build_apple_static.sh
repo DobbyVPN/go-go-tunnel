@@ -1,32 +1,71 @@
 #!/usr/bin/env bash
-# Build and verify one arm64 Apple static bridge with an isolated Conan cache.
+# Build and verify one Apple static bridge architecture with an isolated Conan cache.
 set -euo pipefail
 
-readonly platform="${1:-}"
+readonly requested_platform="${1:-}"
 readonly go_version=1.26.8
-case "$platform" in
+readonly root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+case "$requested_platform" in
   ios)
+    readonly platform=ios
+    readonly architecture=arm64
+    readonly go_arch=arm64
+    readonly rust_target=aarch64-apple-ios
     readonly deployment_target=15.6
     readonly sdk=iphoneos
     readonly system_name=iOS
+    readonly build_name=ios-arm64
+    readonly output_directory="$root/lib/ios"
+    readonly output="$output_directory/libdobby_bridge.a"
+    readonly conan_lockfile="$root/scripts/pins/conan/apple-ios-arm64.lock"
+    ;;
+  ios-simulator-arm64)
+    readonly platform=ios-simulator
+    readonly architecture=arm64
+    readonly go_arch=arm64
+    readonly rust_target=aarch64-apple-ios-sim
+    readonly deployment_target=15.6
+    readonly sdk=iphonesimulator
+    readonly system_name=iOS
+    readonly build_name=ios-simulator-arm64
+    readonly output_directory="$root/lib/ios-simulator/arm64"
+    readonly output="$output_directory/libdobby_bridge.a"
+    readonly conan_lockfile="$root/scripts/pins/conan/apple-ios-arm64.lock"
+    ;;
+  ios-simulator-amd64)
+    readonly platform=ios-simulator
+    readonly architecture=x86_64
+    readonly go_arch=amd64
+    readonly rust_target=x86_64-apple-ios
+    readonly deployment_target=15.6
+    readonly sdk=iphonesimulator
+    readonly system_name=iOS
+    readonly build_name=ios-simulator-amd64
+    readonly output_directory="$root/lib/ios-simulator/amd64"
+    readonly output="$output_directory/libdobby_bridge.a"
+    readonly conan_lockfile="$root/scripts/pins/conan/apple-ios-arm64.lock"
     ;;
   macos)
+    readonly platform=macos
+    readonly architecture=arm64
+    readonly go_arch=arm64
+    readonly rust_target=aarch64-apple-darwin
     readonly deployment_target=12.0
     readonly sdk=macosx
     readonly system_name=Darwin
+    readonly build_name=macos-arm64
+    readonly output_directory="$root/lib/macos"
+    readonly output="$output_directory/libdobby_bridge.a"
+    readonly conan_lockfile="$root/scripts/pins/conan/apple-macos-arm64.lock"
     ;;
   *)
-    echo "usage: $0 ios|macos" >&2
+    echo "usage: $0 ios|ios-simulator-arm64|ios-simulator-amd64|macos" >&2
     exit 2
     ;;
 esac
 
-readonly root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly trusttunnel="$root/TrustTunnelClient"
-readonly build="$trusttunnel/build-$platform-arm64"
-readonly output_directory="$root/lib/$platform"
-readonly output="$output_directory/libdobby_bridge.a"
-readonly conan_lockfile="$root/scripts/pins/conan/apple-$platform-arm64.lock"
+readonly build="$trusttunnel/build-$build_name"
 readonly ios_compiler_builtins_sha256=907dea761e9fd300f3c713602b42934e33c0b480861b8cdb8b529b82a4f48402
 readonly trusttunnel_cargo_lock_sha256=5dfa92024c6ff9dd09f0110fe7f094c5d2e25131787b3cdbacdafb94554b2f93
 readonly conan_version=2.12.2
@@ -127,7 +166,7 @@ export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }${rust_prefix_flags% }"
 configure=(
   cmake -S "$trusttunnel" -B "$build" -GNinja
   -DCMAKE_BUILD_TYPE=Release
-  -DCMAKE_OSX_ARCHITECTURES=arm64
+  "-DCMAKE_OSX_ARCHITECTURES=$architecture"
   -DCMAKE_OSX_DEPLOYMENT_TARGET="$deployment_target"
   -DCMAKE_OSX_SYSROOT="$(xcrun --sdk "$sdk" --show-sdk-path)"
   -DCMAKE_C_COMPILER="$(xcrun --sdk "$sdk" --find clang)"
@@ -138,7 +177,7 @@ configure=(
   -DDOBBY_BRIDGE_STATIC=ON
   -DCARGO_EXTRA_ARGS=--locked
 )
-if [[ "$platform" == ios ]]; then
+if [[ "$platform" == ios || "$platform" == ios-simulator ]]; then
   configure+=( -DCMAKE_SYSTEM_NAME="$system_name" )
 fi
 if command -v ccache >/dev/null; then
@@ -156,11 +195,11 @@ while IFS= read -r library; do static_libraries+=("$library"); done < <(
     -print | sort
 )
 while IFS= read -r library; do
-  if xcrun lipo -info "$library" 2>/dev/null | grep -q 'arm64'; then
+  if xcrun lipo -info "$library" 2>/dev/null | grep -q "$architecture"; then
     static_libraries+=("$library")
   fi
 done < <(find "$CONAN_HOME/p" -type f -name '*.a' -print | sort)
-(( ${#static_libraries[@]} > 0 )) || { echo "no arm64 static libraries found" >&2; exit 1; }
+(( ${#static_libraries[@]} > 0 )) || { echo "no $architecture static libraries found" >&2; exit 1; }
 
 # Recursive Conan cache discovery can encounter byte-identical build and
 # package copies. Merging each copy only duplicates object members, so retain
@@ -179,8 +218,8 @@ done
 (( ${#unique_static_libraries[@]} > 0 )) || { echo "no unique static libraries found" >&2; exit 1; }
 
 merge_libraries=( "${unique_static_libraries[@]}" )
-if [[ "$platform" == ios ]]; then
-  readonly rust_target_libdir="$(rustc --print target-libdir --target aarch64-apple-ios)"
+if [[ "$platform" == ios || "$platform" == ios-simulator ]]; then
+  readonly rust_target_libdir="$(rustc --print target-libdir --target "$rust_target")"
   compiler_builtins=( "$rust_target_libdir"/libcompiler_builtins-*.rlib )
   (( ${#compiler_builtins[@]} == 1 )) && [[ -f "${compiler_builtins[0]}" ]] || {
     echo "expected exactly one pinned iOS compiler-builtins rlib" >&2
@@ -189,6 +228,12 @@ if [[ "$platform" == ios ]]; then
 
   readonly sanitized_directory="$build/sanitized-static-inputs"
   mkdir "$sanitized_directory"
+  expected_compiler_builtins_sha256="$ios_compiler_builtins_sha256"
+  if [[ "$platform" == ios-simulator ]]; then
+    # Simulator targets use different immutable rlibs from the physical iOS
+    # target. The exact Rust release and commit are verified above.
+    expected_compiler_builtins_sha256="$(shasum -a 256 "${compiler_builtins[0]}" | awk '{print $1}')"
+  fi
   merge_libraries=()
   input_number=0
   for library in "${unique_static_libraries[@]}"; do
@@ -199,8 +244,8 @@ if [[ "$platform" == ios ]]; then
     python3 "$root/scripts/prune_apple_compiler_builtins.py" \
       --archive "$staged" \
       --compiler-builtins "${compiler_builtins[0]}" \
-      --expected-compiler-builtins-sha256 "$ios_compiler_builtins_sha256" \
-      --platform ios \
+      --expected-compiler-builtins-sha256 "$expected_compiler_builtins_sha256" \
+      --platform "$platform" \
       --maximum-deployment-target "$deployment_target"
     [[ "$(shasum -a 256 "$library" | awk '{print $1}')" == "$original_digest" ]] || {
       echo "Apple input sanitizer modified a Conan/build-cache archive" >&2
@@ -233,13 +278,17 @@ if grep -F \
   exit 1
 fi
 
-if [[ "$platform" == ios ]]; then
+if [[ "$platform" == ios || "$platform" == ios-simulator ]]; then
   (
     cd "$root/examples"
-    CGO_ENABLED=1 GOOS=ios GOARCH=arm64 \
-      CC="$(xcrun --sdk iphoneos --find clang) -arch arm64 -isysroot $(xcrun --sdk iphoneos --show-sdk-path) -miphoneos-version-min=$deployment_target" \
-      CXX="$(xcrun --sdk iphoneos --find clang++) -arch arm64 -isysroot $(xcrun --sdk iphoneos --show-sdk-path) -miphoneos-version-min=$deployment_target" \
-      go build -trimpath -tags static -o "$build/example-ios"
+    minimum_flag=-miphoneos-version-min
+    if [[ "$platform" == ios-simulator ]]; then minimum_flag=-mios-simulator-version-min; fi
+    simulator_tags=static
+    if [[ "$platform" == ios-simulator ]]; then simulator_tags='static,simulator'; fi
+    CGO_ENABLED=1 GOOS=ios GOARCH="$go_arch" \
+      CC="$(xcrun --sdk "$sdk" --find clang) -arch $architecture -isysroot $(xcrun --sdk "$sdk" --show-sdk-path) $minimum_flag=$deployment_target" \
+      CXX="$(xcrun --sdk "$sdk" --find clang++) -arch $architecture -isysroot $(xcrun --sdk "$sdk" --show-sdk-path) $minimum_flag=$deployment_target" \
+      go build -trimpath -tags "$simulator_tags" -o "$build/example-ios"
   )
 else
   (

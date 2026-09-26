@@ -11,7 +11,8 @@ class AppleStaticBuildContractTests(unittest.TestCase):
         cls.source = SCRIPT.read_text(encoding="utf-8")
 
     def test_both_consumer_links_use_an_explicit_sdk_sysroot(self) -> None:
-        self.assertGreaterEqual(self.source.count("-isysroot $(xcrun --sdk"), 4)
+        self.assertGreaterEqual(self.source.count("-isysroot $(xcrun --sdk"), 2)
+        self.assertIn('sdk=iphonesimulator', self.source)
 
     def test_native_compilers_remap_source_and_dependency_paths(self) -> None:
         for required in (
@@ -29,7 +30,7 @@ class AppleStaticBuildContractTests(unittest.TestCase):
             self.assertIn(required, self.source)
 
     def test_exact_rust_toolchain_is_checked_for_both_platforms(self) -> None:
-        platform_branch = self.source.index('if [[ "$platform" == ios ]]')
+        platform_branch = self.source.index('if [[ "$platform" == ios || "$platform" == ios-simulator ]]')
         for required in (
             "rustc --version --verbose",
             'release: $rust_release',
@@ -38,7 +39,7 @@ class AppleStaticBuildContractTests(unittest.TestCase):
             self.assertLess(self.source.index(required), platform_branch)
 
     def test_exact_conan_version_is_checked_for_both_platforms(self) -> None:
-        platform_branch = self.source.index('if [[ "$platform" == ios ]]')
+        platform_branch = self.source.index('if [[ "$platform" == ios || "$platform" == ios-simulator ]]')
         for required in (
             "readonly conan_version=2.12.2",
             '$(conan --version)',
@@ -54,10 +55,21 @@ class AppleStaticBuildContractTests(unittest.TestCase):
         self.assertIn("-DCARGO_EXTRA_ARGS=--locked", self.source)
 
     def test_conan_graph_uses_platform_lock(self) -> None:
-        self.assertIn('apple-$platform-arm64.lock', self.source)
+        self.assertIn('apple-ios-arm64.lock', self.source)
+        self.assertIn('apple-macos-arm64.lock', self.source)
         self.assertIn('export DOBBY_CONAN_LOCKFILE="$conan_lockfile"', self.source)
         self.assertIn('DOBBY_CONAN_LOCKFILE is required', self.source)
         self.assertIn('Apple build requires the locked Conan provider', self.source)
+
+    def test_simulator_build_uses_simulator_sdk_and_build_tags(self) -> None:
+        for required in (
+            "ios-simulator-arm64)",
+            "ios-simulator-amd64)",
+            "sdk=iphonesimulator",
+            "-mios-simulator-version-min",
+            "simulator_tags='static,simulator'",
+        ):
+            self.assertIn(required, self.source)
 
     def test_final_archive_verification_precedes_consumer_link(self) -> None:
         verifier = self.source.index("scripts/verify_apple_archive.py")
