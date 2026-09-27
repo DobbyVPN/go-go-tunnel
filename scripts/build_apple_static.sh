@@ -325,7 +325,7 @@ fi
 
 mkdir -p "$output_directory"
 readonly merged="$build/libdobby_bridge-merged.a"
-libtool -static -D -o "$merged" "${merge_libraries[@]}"
+libtool -static -D -arch_only "$architecture" -o "$merged" "${merge_libraries[@]}"
 strip -S -D "$merged"
 install -m 0644 "$merged" "$output"
 python3 "$root/scripts/verify_apple_archive.py" \
@@ -347,29 +347,33 @@ if grep -F \
   exit 1
 fi
 
-if [[ "$platform" == ios-simulator ]]; then
-  readonly simulator_bridge_link="$root/lib/ios-simulator/libdobby_bridge.a"
-  readonly simulator_bridge_backup="$build/libdobby_bridge-before-consumer.a"
-  simulator_bridge_link_created=0
-  simulator_bridge_backup_created=0
-  restore_simulator_consumer_bridge() {
+if [[ "$platform" == ios-simulator || ( "$platform" == macos && "$architecture" == x86_64 ) ]]; then
+  if [[ "$platform" == ios-simulator ]]; then
+    readonly consumer_bridge_link="$root/lib/ios-simulator/libdobby_bridge.a"
+  else
+    readonly consumer_bridge_link="$root/lib/macos/libdobby_bridge.a"
+  fi
+  readonly consumer_bridge_backup="$build/libdobby_bridge-before-consumer.a"
+  consumer_bridge_link_created=0
+  consumer_bridge_backup_created=0
+  restore_consumer_bridge() {
     local status=$?
     trap - EXIT
-    if [[ "$simulator_bridge_link_created" == 1 ]]; then
-      rm -f "$simulator_bridge_link" || status=$?
+    if [[ "$consumer_bridge_link_created" == 1 ]]; then
+      rm -f "$consumer_bridge_link" || status=$?
     fi
-    if [[ "$simulator_bridge_backup_created" == 1 ]]; then
-      mv "$simulator_bridge_backup" "$simulator_bridge_link" || status=$?
+    if [[ "$consumer_bridge_backup_created" == 1 ]]; then
+      mv "$consumer_bridge_backup" "$consumer_bridge_link" || status=$?
     fi
     exit "$status"
   }
-  trap restore_simulator_consumer_bridge EXIT
-  if [[ -e "$simulator_bridge_link" || -L "$simulator_bridge_link" ]]; then
-    mv "$simulator_bridge_link" "$simulator_bridge_backup"
-    simulator_bridge_backup_created=1
+  trap restore_consumer_bridge EXIT
+  if [[ -e "$consumer_bridge_link" || -L "$consumer_bridge_link" ]]; then
+    mv "$consumer_bridge_link" "$consumer_bridge_backup"
+    consumer_bridge_backup_created=1
   fi
-  ln -s "$output" "$simulator_bridge_link"
-  simulator_bridge_link_created=1
+  ln -s "$output" "$consumer_bridge_link"
+  consumer_bridge_link_created=1
 fi
 
 if [[ "$platform" == ios || "$platform" == ios-simulator ]]; then

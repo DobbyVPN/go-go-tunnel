@@ -103,15 +103,33 @@ class AppleStaticBuildContractTests(unittest.TestCase):
         ):
             self.assertIn(required, self.source)
 
-    def test_simulator_consumer_link_uses_the_current_arch_archive_and_restores_existing(self) -> None:
+    def test_consumer_links_stage_the_current_archive_and_restore_existing(self) -> None:
         for required in (
-            'simulator_bridge_link="$root/lib/ios-simulator/libdobby_bridge.a"',
-            'simulator_bridge_backup="$build/libdobby_bridge-before-consumer.a"',
-            'ln -s "$output" "$simulator_bridge_link"',
-            "restore_simulator_consumer_bridge()",
-            'mv "$simulator_bridge_backup" "$simulator_bridge_link"',
+            'if [[ "$platform" == ios-simulator || ( "$platform" == macos && "$architecture" == x86_64 ) ]]; then',
+            'consumer_bridge_link="$root/lib/ios-simulator/libdobby_bridge.a"',
+            'consumer_bridge_link="$root/lib/macos/libdobby_bridge.a"',
+            'consumer_bridge_backup="$build/libdobby_bridge-before-consumer.a"',
+            'if [[ -e "$consumer_bridge_link" || -L "$consumer_bridge_link" ]]; then',
+            'mv "$consumer_bridge_link" "$consumer_bridge_backup"',
+            'ln -s "$output" "$consumer_bridge_link"',
+            'restore_consumer_bridge() ',
+            'rm -f "$consumer_bridge_link"',
+            'mv "$consumer_bridge_backup" "$consumer_bridge_link"',
         ):
             self.assertIn(required, self.source)
+        staging = self.source.index('ln -s "$output" "$consumer_bridge_link"')
+        ios_consumer = self.source.index('CGO_ENABLED=1 GOOS=ios GOARCH="$go_arch"')
+        macos_consumer = self.source.index('CGO_ENABLED=1 GOOS=darwin GOARCH="$go_arch"')
+        self.assertLess(staging, ios_consumer)
+        self.assertLess(staging, macos_consumer)
+        self.assertLess(
+            self.source.index('trap restore_consumer_bridge EXIT'),
+            self.source.index('mv "$consumer_bridge_link" "$consumer_bridge_backup"'),
+        )
+        self.assertLess(
+            self.source.index('rm -f "$consumer_bridge_link"'),
+            self.source.index('mv "$consumer_bridge_backup" "$consumer_bridge_link"'),
+        )
 
     def test_final_archive_verification_precedes_consumer_link(self) -> None:
         verifier = self.source.index("scripts/verify_apple_archive.py")
@@ -120,8 +138,13 @@ class AppleStaticBuildContractTests(unittest.TestCase):
         self.assertLess(verifier, privacy_scan)
         self.assertLess(privacy_scan, consumer)
 
+    def test_archive_merge_selects_only_the_requested_architecture(self) -> None:
+        self.assertIn(
+            'libtool -static -D -arch_only "$architecture" -o "$merged"',
+            self.source,
+        )
+
     def test_final_archive_uses_deterministic_apple_tools(self) -> None:
-        self.assertIn('libtool -static -D -o "$merged"', self.source)
         self.assertIn('strip -S -D "$merged"', self.source)
         self.assertIn("--canonicalize-metadata", self.source)
         self.assertNotIn('libtool -static -o "$merged"', self.source)
