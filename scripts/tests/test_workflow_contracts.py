@@ -7,7 +7,7 @@ WORKFLOWS = ROOT / ".github" / "workflows"
 
 
 class WorkflowContractTests(unittest.TestCase):
-    def test_apple_workflows_pin_the_arm64_macos_image(self) -> None:
+    def test_apple_workflows_pin_the_macos_image(self) -> None:
         for name in ("build-ios.yml", "build-macos.yml"):
             source = (WORKFLOWS / name).read_text(encoding="utf-8")
             self.assertNotIn("runs-on: macos-latest", source, name)
@@ -67,7 +67,7 @@ class WorkflowContractTests(unittest.TestCase):
         )
         for name in ("build-ios.yml", "build-macos.yml"):
             source = (WORKFLOWS / name).read_text(encoding="utf-8")
-            static_source = source if name == "build-ios.yml" else source[source.index("macos-arm64-static:"):]
+            static_source = source if name == "build-ios.yml" else source[source.index("  macos-static:"):]
             for suite in suites:
                 self.assertIn(suite, static_source, f"{name}: {suite}")
             self.assertLess(
@@ -293,8 +293,15 @@ class WorkflowContractTests(unittest.TestCase):
             "verify_single_archive()",
             "libdobby_bridge-android-x86_64-static",
             "libdobby_bridge-ios-simulator",
+            "libdobby_bridge-macos-arm64-static",
+            "libdobby_bridge-macos-x86_64-static",
+            "libdobby_bridge-macos-universal-static",
             'android_x86_64: {run_id: $android_run_id, sha256: $android_x86_64_sha256}',
             'ios_simulator: {run_id: $ios_run_id, sha256: $ios_simulator_sha256}',
+            "schema: 3",
+            '["arm64", "x86_64"]',
+            'macos_arm64: {run_id: $macos_run_id, sha256: $macos_arm64_sha256}',
+            'macos_x86_64: {run_id: $macos_run_id, sha256: $macos_x86_64_sha256}',
             'test "$entries" = "libdobby_bridge.a"',
             'test ! -L "$expected"',
             'git fetch origin "+refs/heads/$TARGET_BRANCH:refs/remotes/origin/$TARGET_BRANCH"',
@@ -304,6 +311,31 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertNotIn("get_latest_run", source)
         self.assertNotIn("|| echo", source)
         self.assertEqual(source.count("set -euo pipefail"), 3)
+
+    def test_macos_static_workflow_builds_and_combines_both_verified_architectures(self) -> None:
+        source = (WORKFLOWS / "build-macos.yml").read_text(encoding="utf-8")
+        for required in (
+            "macos-static:",
+            "arch: arm64",
+            "runner: macos-15",
+            "native_input_platform: macos",
+            "arch: x86_64",
+            "runner: macos-15-intel",
+            "native_input_platform: macos-x86_64",
+            "runs-on: ${{ matrix.runner }}",
+            "rust_target: x86_64-apple-darwin",
+            "scripts/pins/conan/apple-macos-arm64.lock",
+            '--platform "${{ matrix.native_input_platform }}"',
+            'scripts/build_apple_static.sh "$APPLE_STATIC_PLATFORM"',
+            "libdobby_bridge-macos-${{ matrix.arch }}-static",
+            "macos-universal-static:",
+            "lipo -create",
+            'lipo -thin "$architecture"',
+            'cmp "$RUNNER_TEMP/libdobby_bridge-$architecture.a"',
+            "name: libdobby_bridge-macos-universal-static",
+            "path: lib/macos/libdobby_bridge.a",
+        ):
+            self.assertIn(required, source)
 
     def test_ios_workflow_builds_and_uploads_universal_simulator_bridge(self) -> None:
         source = (WORKFLOWS / "build-ios.yml").read_text(encoding="utf-8")

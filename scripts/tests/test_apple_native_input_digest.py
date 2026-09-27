@@ -37,6 +37,11 @@ class AppleNativeInputDigestTests(unittest.TestCase):
             MODULE.PLATFORMS["macos"]["conan_lock"],
             "scripts/pins/conan/apple-macos-arm64.lock",
         )
+        self.assertEqual(
+            MODULE.PLATFORMS["macos-x86_64"]["conan_lock"],
+            "scripts/pins/conan/apple-macos-arm64.lock",
+        )
+        self.assertEqual(MODULE.PLATFORMS["macos-x86_64"]["architecture"], "x86_64")
 
     def test_digest_is_deterministic_and_platform_specific(self) -> None:
         root = SCRIPT.parents[1]
@@ -51,6 +56,11 @@ class AppleNativeInputDigestTests(unittest.TestCase):
         self.assertRegex(first, r"^[0-9a-f]{64}$")
         self.assertEqual(first, MODULE.digest(platform="ios", **common))
         self.assertNotEqual(first, MODULE.digest(platform="macos", **(common | {"deployment_target": "12.0"})))
+        macos_common = common | {"deployment_target": "12.0"}
+        self.assertNotEqual(
+            MODULE.digest(platform="macos", **macos_common),
+            MODULE.digest(platform="macos-x86_64", **macos_common),
+        )
 
     def test_dirty_or_mismatched_submodule_is_rejected(self) -> None:
         root = SCRIPT.parents[1]

@@ -63,7 +63,7 @@ jobs:
         run: |
           set -euo pipefail
           stage="$RUNNER_TEMP/static-libraries"
-          mkdir -p "$stage/android-arm64" "$stage/android-x86_64" "$stage/ios-device" "$stage/ios-simulator" "$stage/macos"
+          mkdir -p "$stage/android-arm64" "$stage/android-x86_64" "$stage/ios-device" "$stage/ios-simulator" "$stage/macos-arm64" "$stage/macos-x86_64" "$stage/macos"
           gh run download "$ANDROID_RUN_ID" \
             --name libdobby_bridge-android-arm64-v8a-static \
             --dir "$stage/android-arm64"
@@ -78,6 +78,12 @@ jobs:
             --dir "$stage/ios-simulator"
           gh run download "$MACOS_RUN_ID" \
             --name libdobby_bridge-macos-arm64-static \
+            --dir "$stage/macos-arm64"
+          gh run download "$MACOS_RUN_ID" \
+            --name libdobby_bridge-macos-x86_64-static \
+            --dir "$stage/macos-x86_64"
+          gh run download "$MACOS_RUN_ID" \
+            --name libdobby_bridge-macos-universal-static \
             --dir "$stage/macos"
 
           verify_single_archive() {
@@ -93,6 +99,8 @@ jobs:
           verify_single_archive "$stage/android-x86_64"
           verify_single_archive "$stage/ios-device"
           verify_single_archive "$stage/ios-simulator"
+          verify_single_archive "$stage/macos-arm64"
+          verify_single_archive "$stage/macos-x86_64"
           verify_single_archive "$stage/macos"
           install -D -m 0644 "$stage/android-arm64/libdobby_bridge.a" lib/android/arm64-v8a/libdobby_bridge.a
           install -D -m 0644 "$stage/android-x86_64/libdobby_bridge.a" lib/android/x86_64/libdobby_bridge.a
@@ -105,6 +113,8 @@ jobs:
           ios_sha="$(sha256sum lib/ios/libdobby_bridge.a | awk '{print $1}')"
           ios_simulator_sha="$(sha256sum lib/ios-simulator/libdobby_bridge.a | awk '{print $1}')"
           macos_sha="$(sha256sum lib/macos/libdobby_bridge.a | awk '{print $1}')"
+          macos_arm64_sha="$(sha256sum "$stage/macos-arm64/libdobby_bridge.a" | awk '{print $1}')"
+          macos_x86_64_sha="$(sha256sum "$stage/macos-x86_64/libdobby_bridge.a" | awk '{print $1}')"
           jq -n \
             --arg source_sha "$SOURCE_SHA" \
             --arg android_run_id "$ANDROID_RUN_ID" \
@@ -115,12 +125,16 @@ jobs:
             --arg ios_simulator_sha256 "$ios_simulator_sha" \
             --arg macos_run_id "$MACOS_RUN_ID" \
             --arg macos_sha256 "$macos_sha" \
-            '{schema: 2, source_sha: $source_sha, artifacts: {
+            --arg macos_arm64_sha256 "$macos_arm64_sha" \
+            --arg macos_x86_64_sha256 "$macos_x86_64_sha" \
+            '{schema: 3, source_sha: $source_sha, artifacts: {
               android: {run_id: $android_run_id, sha256: $android_sha256},
               android_x86_64: {run_id: $android_run_id, sha256: $android_x86_64_sha256},
               ios: {run_id: $ios_run_id, sha256: $ios_sha256},
               ios_simulator: {run_id: $ios_run_id, sha256: $ios_simulator_sha256},
-              macos: {run_id: $macos_run_id, sha256: $macos_sha256}
+              macos: {run_id: $macos_run_id, sha256: $macos_sha256, architectures: ["arm64", "x86_64"]},
+              macos_arm64: {run_id: $macos_run_id, sha256: $macos_arm64_sha256},
+              macos_x86_64: {run_id: $macos_run_id, sha256: $macos_x86_64_sha256}
             }}' > lib/static-libraries.provenance.json
 
       - name: Commit and push exact artifacts

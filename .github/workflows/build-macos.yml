@@ -168,9 +168,22 @@ jobs:
         working-directory: examples
         run: go build -v -o examples
 
-  macos-arm64-static:
-    runs-on: macos-15
+  macos-static:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-15
+            native_input_platform: macos
+            rust_target: aarch64-apple-darwin
+          - arch: x86_64
+            runner: macos-15-intel
+            native_input_platform: macos-x86_64
+            rust_target: x86_64-apple-darwin
+    runs-on: ${{ matrix.runner }}
     env:
+      APPLE_STATIC_PLATFORM: macos-${{ matrix.arch }}
       DOBBY_CONAN_LOCKFILE: ${{ github.workspace }}/scripts/pins/conan/apple-macos-arm64.lock
     steps:
       - name: Checkout
@@ -179,7 +192,7 @@ jobs:
           submodules: recursive
 
       - name: Configure isolated Conan home
-        run: echo "CONAN_HOME=$RUNNER_TEMP/dobby-conan-macos-static" >> "$GITHUB_ENV"
+        run: echo "CONAN_HOME=$RUNNER_TEMP/dobby-conan-macos-static-${{ matrix.arch }}" >> "$GITHUB_ENV"
 
       - name: Select exact Xcode
         run: |
@@ -195,7 +208,7 @@ jobs:
         id: native-input
         run: |
           digest="$(python3 scripts/apple_native_input_digest.py \
-            --platform macos \
+            --platform "${{ matrix.native_input_platform }}" \
             --conan-version "$CONAN_VERSION" \
             --xcode-key "$APPLE_TOOLCHAIN_KEY" \
             --deployment-target "$MACOS_DEPLOYMENT_TARGET" \
@@ -216,7 +229,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: "1.85.0"
-          targets: aarch64-apple-darwin
+          targets: ${{ matrix.rust_target }}
 
       - name: Set up Go
         uses: actions/setup-go@v6
@@ -231,7 +244,7 @@ jobs:
       - name: Set up ccache
         uses: hendrikmuhs/ccache-action@v1.2.23
         with:
-          key: macos-static-${{ env.MACOS_DEPLOYMENT_TARGET }}-${{ env.APPLE_TOOLCHAIN_KEY }}-ccache
+          key: macos-static-${{ matrix.arch }}-${{ env.MACOS_DEPLOYMENT_TARGET }}-${{ env.APPLE_TOOLCHAIN_KEY }}-ccache
 
       - name: Cargo cache
         uses: actions/cache@v5
@@ -241,14 +254,14 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-          key: macos-static-${{ runner.arch }}-${{ steps.native-input.outputs.digest }}-cargo
+          key: macos-static-${{ matrix.arch }}-${{ steps.native-input.outputs.digest }}-cargo
 
       - name: Conan cache
         uses: actions/cache@v5
         id: conan-cache
         with:
-          path: ${{ runner.temp }}/dobby-conan-macos-static
-          key: macos-static-${{ runner.arch }}-${{ steps.native-input.outputs.digest }}-conan
+          path: ${{ runner.temp }}/dobby-conan-macos-static-${{ matrix.arch }}
+          key: macos-static-${{ matrix.arch }}-${{ steps.native-input.outputs.digest }}-conan
 
       - name: Verify Apple static tooling on pristine checkout
         run: |
@@ -266,17 +279,60 @@ jobs:
         run: python3 scripts/prepare_pinned_conan.py --trusttunnel TrustTunnelClient --mode locked
 
       - name: Build and verify static macOS bridge
-        run: scripts/build_apple_static.sh macos
+        run: scripts/build_apple_static.sh "$APPLE_STATIC_PLATFORM"
 
       - name: Save conan cache
         uses: actions/cache/save@v5
         if: steps.conan-cache.outputs.cache-hit != 'true'
         with:
-          path: ${{ runner.temp }}/dobby-conan-macos-static
-          key: macos-static-${{ runner.arch }}-${{ steps.native-input.outputs.digest }}-conan
+          path: ${{ runner.temp }}/dobby-conan-macos-static-${{ matrix.arch }}
+          key: macos-static-${{ matrix.arch }}-${{ steps.native-input.outputs.digest }}-conan
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
+          name: libdobby_bridge-macos-${{ matrix.arch }}-static
+          path: lib/macos/${{ matrix.arch }}/libdobby_bridge.a
+
+  macos-universal-static:
+    needs: macos-static
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Download arm64 archive
+        uses: actions/download-artifact@v7
+        with:
           name: libdobby_bridge-macos-arm64-static
+          path: slices/arm64
+
+      - name: Download x86_64 archive
+        uses: actions/download-artifact@v7
+        with:
+          name: libdobby_bridge-macos-x86_64-static
+          path: slices/x86_64
+
+      - name: Create and verify universal archive
+        run: |
+          set -euo pipefail
+          mkdir -p lib/macos
+          lipo -create \
+            slices/arm64/libdobby_bridge.a \
+            slices/x86_64/libdobby_bridge.a \
+            -output lib/macos/libdobby_bridge.a
+          architectures="$(lipo -archs lib/macos/libdobby_bridge.a | tr ' ' '\n' | LC_ALL=C sort | paste -sd ' ' -)"
+          test "$architectures" = "arm64 x86_64"
+          for architecture in arm64 x86_64; do
+            lipo -thin "$architecture" \
+              -output "$RUNNER_TEMP/libdobby_bridge-$architecture.a" \
+              lib/macos/libdobby_bridge.a
+            cmp "$RUNNER_TEMP/libdobby_bridge-$architecture.a" \
+              "slices/$architecture/libdobby_bridge.a"
+          done
+
+      - name: Upload universal artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: libdobby_bridge-macos-universal-static
           path: lib/macos/libdobby_bridge.a

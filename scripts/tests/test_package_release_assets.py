@@ -21,6 +21,10 @@ RUNS = {"android": "1", "ios": "2", "linux": "3", "macos": "4", "windows": "5"}
 
 
 class PackageReleaseAssetsTests(unittest.TestCase):
+    def test_macos_static_release_asset_is_universal(self) -> None:
+        spec = next(asset for asset in MODULE.ASSETS if asset.input_directory == "macos-static")
+        self.assertEqual(spec.name, "libdobby_bridge-macos-universal-static.zip")
+
     def make_input(self, root: Path) -> None:
         for spec in MODULE.ASSETS:
             for _, source in spec.members:
@@ -37,6 +41,7 @@ class PackageReleaseAssetsTests(unittest.TestCase):
             second = root / "second"
             first_manifest = MODULE.package_assets(SOURCE_SHA, RUNS, input_root, first)
             second_manifest = MODULE.package_assets(SOURCE_SHA, RUNS, input_root, second)
+            self.assertEqual(json.loads(first_manifest.read_text())["schema"], 2)
             self.assertEqual(first_manifest.read_bytes(), second_manifest.read_bytes())
             for spec in MODULE.ASSETS:
                 self.assertEqual((first / spec.name).read_bytes(), (second / spec.name).read_bytes())
@@ -96,16 +101,29 @@ class PackageReleaseAssetsTests(unittest.TestCase):
             "--verify-tag",
             "release-assets.manifest.json",
             "lib/static-libraries.provenance.json",
+            ".schema == 3",
+            'keys == ["android", "android_x86_64", "ios", "ios_simulator", "macos", "macos_arm64", "macos_x86_64"]',
+            '.architectures == ["arm64", "x86_64"]',
             'test "$(git rev-parse "$SOURCE_SHA^")" = "$static_source_sha"',
             'git diff --name-only "$static_source_sha" "$SOURCE_SHA"',
             'verify_recorded_static android "Build Android"',
             'verify_recorded_static android_x86_64 "Build Android"',
             'verify_recorded_static ios_simulator "Build iOS"',
+            'verify_recorded_static macos "Build macOS" lib/macos/libdobby_bridge.a',
             "cmp release-input/android-static/libdobby_bridge.a lib/android/arm64-v8a/libdobby_bridge.a",
             "cmp release-input/android-x86_64-static/libdobby_bridge.a lib/android/x86_64/libdobby_bridge.a",
             "cmp release-input/ios/libdobby_bridge.a lib/ios/libdobby_bridge.a",
             "cmp release-input/ios-simulator/libdobby_bridge.a lib/ios-simulator/libdobby_bridge.a",
             "cmp release-input/macos-static/libdobby_bridge.a lib/macos/libdobby_bridge.a",
+            "libdobby_bridge-macos-universal-static",
+            "libdobby_bridge-macos-arm64-static",
+            "libdobby_bridge-macos-x86_64-static",
+            "release-input/macos-arm64-static/libdobby_bridge.a",
+            "release-input/macos-x86_64-static/libdobby_bridge.a",
+            "libdobby_bridge-macos-universal-static.zip",
+            '.artifacts.macos.run_id == .artifacts.macos_arm64.run_id',
+            '.artifacts.macos.run_id == .artifacts.macos_x86_64.run_id',
+            "release-input/macos-x86_64-static/libdobby_bridge.a",
             "gh release download",
             "gh release upload",
             "gh release edit",

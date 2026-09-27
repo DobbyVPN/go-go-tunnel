@@ -45,7 +45,7 @@ case "$requested_platform" in
     readonly output="$output_directory/libdobby_bridge.a"
     readonly conan_lockfile="$root/scripts/pins/conan/apple-ios-arm64.lock"
     ;;
-  macos)
+  macos-arm64)
     readonly platform=macos
     readonly architecture=arm64
     readonly go_arch=arm64
@@ -54,12 +54,25 @@ case "$requested_platform" in
     readonly sdk=macosx
     readonly system_name=Darwin
     readonly build_name=macos-arm64
-    readonly output_directory="$root/lib/macos"
+    readonly output_directory="$root/lib/macos/arm64"
+    readonly output="$output_directory/libdobby_bridge.a"
+    readonly conan_lockfile="$root/scripts/pins/conan/apple-macos-arm64.lock"
+    ;;
+  macos-x86_64)
+    readonly platform=macos
+    readonly architecture=x86_64
+    readonly go_arch=amd64
+    readonly rust_target=x86_64-apple-darwin
+    readonly deployment_target=12.0
+    readonly sdk=macosx
+    readonly system_name=Darwin
+    readonly build_name=macos-x86_64
+    readonly output_directory="$root/lib/macos/x86_64"
     readonly output="$output_directory/libdobby_bridge.a"
     readonly conan_lockfile="$root/scripts/pins/conan/apple-macos-arm64.lock"
     ;;
   *)
-    echo "usage: $0 ios|ios-simulator-arm64|ios-simulator-amd64|macos" >&2
+    echo "usage: $0 ios|ios-simulator-arm64|ios-simulator-amd64|macos-arm64|macos-x86_64" >&2
     exit 2
     ;;
 esac
@@ -128,6 +141,12 @@ grep -Fq 'DOBBY_CONAN_LOCKFILE is required' "$trusttunnel/cmake/conan_provider.c
   exit 1
 }
 export DOBBY_CONAN_LOCKFILE="$conan_lockfile"
+if [[ "$platform" == macos && "$architecture" == x86_64 ]]; then
+  grep -Fxq 'arch=x86_64' "$CONAN_HOME/profiles/default" || {
+    echo "Conan profile differs from the native Intel macOS runner" >&2
+    exit 1
+  }
+fi
 [[ "$(shasum -a 256 "$trusttunnel/trusttunnel/Cargo.lock" | awk '{print $1}')" == "$trusttunnel_cargo_lock_sha256" ]] || {
   echo "TrustTunnel Cargo lock differs from the pinned Apple input" >&2
   exit 1
@@ -368,10 +387,10 @@ if [[ "$platform" == ios || "$platform" == ios-simulator ]]; then
 else
   (
     cd "$root/examples"
-    CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 \
-      CC="$(xcrun --sdk macosx --find clang) -arch arm64 -isysroot $(xcrun --sdk macosx --show-sdk-path) -mmacosx-version-min=$deployment_target" \
-      CXX="$(xcrun --sdk macosx --find clang++) -arch arm64 -isysroot $(xcrun --sdk macosx --show-sdk-path) -mmacosx-version-min=$deployment_target" \
-      go build -trimpath -tags static -o "$build/example-macos-arm64"
+    CGO_ENABLED=1 GOOS=darwin GOARCH="$go_arch" \
+      CC="$(xcrun --sdk macosx --find clang) -arch $architecture -isysroot $(xcrun --sdk macosx --show-sdk-path) -mmacosx-version-min=$deployment_target" \
+      CXX="$(xcrun --sdk macosx --find clang++) -arch $architecture -isysroot $(xcrun --sdk macosx --show-sdk-path) -mmacosx-version-min=$deployment_target" \
+      go build -trimpath -tags static -o "$build/example-macos-$go_arch"
   )
 fi
 
