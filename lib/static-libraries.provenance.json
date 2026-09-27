@@ -1,26 +1,38 @@
 {
-  "schema": 2,
-  "source_sha": "961f6a1d9c784c555b7e36fb3766ea4b4c050189",
+  "schema": 3,
+  "source_sha": "ca149c414df7603927ca1c0ef8fcb5929b7f35c3",
   "artifacts": {
     "android": {
-      "run_id": "36235298143",
+      "run_id": "36309656072",
       "sha256": "b2695eed5912b77c0a139e0a6be3a9b8023dffeade78f24911b272214b9c22f2"
     },
     "android_x86_64": {
-      "run_id": "36235298143",
+      "run_id": "36309656072",
       "sha256": "48f728fbd59cfb29f493247bb8f1b74954945e08d55089ad2b09b76882eb85fd"
     },
     "ios": {
-      "run_id": "36235298167",
-      "sha256": "cc2683a0b7fb2f336ea93e17cff1ef9a0459e79d3b49d7b7bf0f703404595661"
+      "run_id": "36309655875",
+      "sha256": "091549195c121b084fd7209b9c93ff893e9a99a49d5365d88c1c67987092faf2"
     },
     "ios_simulator": {
-      "run_id": "36235298167",
-      "sha256": "cf7f39e554e8cec6810aeda2a1e2879352a4700bd727d7678a305a4e54917573"
+      "run_id": "36309655875",
+      "sha256": "3ff7015baec9f2a7e3b89f50f5c8d6e61ce71e07afc5b5872e59abee37e6515b"
     },
     "macos": {
-      "run_id": "36235298201",
-      "sha256": "4c88a36c3133e61faf9444548ac8d4baa0bf5c33c1be358271efec599b7161fc"
+      "run_id": "36309655904",
+      "sha256": "d4abd72174e74295982d041f97c5a7be6259ff09911e3145d2ed2be80a89e9a3",
+      "architectures": [
+        "arm64",
+        "x86_64"
+      ]
+    },
+    "macos_arm64": {
+      "run_id": "36309655904",
+      "sha256": "2a79b6977170c72677dbab07a274bd9ae37fe7cfcc597535bc96f0ccdd27e785"
+    },
+    "macos_x86_64": {
+      "run_id": "36309655904",
+      "sha256": "799a872868c91f5122f63e2c8dd52e5ecbfdf82c2f91df73e829e4eefa8e77e8"
     }
   }
 }
