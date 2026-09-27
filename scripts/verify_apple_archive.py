@@ -110,6 +110,14 @@ def parse_archive_members(output: str) -> list[str]:
     return members
 
 
+def verify_architecture(architectures: list[str], expected: str) -> None:
+    """Require a thin archive for exactly the requested Apple architecture."""
+    if architectures != [expected]:
+        raise VerificationError(
+            f"archive architecture mismatch (expected={expected} observed={' '.join(architectures)})"
+        )
+
+
 def _archive_number(field: bytes, base: int, name: str) -> int:
     value = field.rstrip(b" ")
     digits = b"01234567" if base == 8 else b"0123456789"
@@ -224,6 +232,14 @@ def main() -> int:
             archive.write_bytes(canonicalize_archive_metadata(raw))
             raw = archive.read_bytes()
         deterministic_members = verify_deterministic_archive(raw)
+        architecture_output = subprocess.run(
+            ["xcrun", "lipo", "-archs", str(archive)],
+            check=True,
+            stdin=subprocess.DEVNULL,
+            text=True,
+            stdout=subprocess.PIPE,
+        ).stdout
+        verify_architecture(architecture_output.split(), args.architecture)
         completed = subprocess.run(
             ["xcrun", "otool", "-l", str(archive)],
             check=True,
@@ -250,7 +266,7 @@ def main() -> int:
         print(f"error: Apple archive verification failed: {error}")
         return 1
     print(
-        f"Apple archive verified platform={args.platform} "
+        f"Apple archive verified platform={args.platform} architecture={args.architecture} "
         f"maximum={args.maximum_deployment_target} members={len(records)} "
         f"deterministic-members={deterministic_members}"
     )

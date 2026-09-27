@@ -20,6 +20,7 @@ PLATFORMS = {
         "conan_lock": "scripts/pins/conan/apple-ios-arm64.lock",
         "workflow": ".github/workflows/build-ios.yml",
         "profile": "apple-ios-arm64",
+        "architecture": "arm64",
         "sdk": "iphoneos",
         "rust_target": "aarch64-apple-ios",
     },
@@ -27,8 +28,17 @@ PLATFORMS = {
         "conan_lock": "scripts/pins/conan/apple-macos-arm64.lock",
         "workflow": ".github/workflows/build-macos.yml",
         "profile": "apple-macos-arm64",
+        "architecture": "arm64",
         "sdk": "macosx",
         "rust_target": "aarch64-apple-darwin",
+    },
+    "macos-x86_64": {
+        "conan_lock": "scripts/pins/conan/apple-macos-arm64.lock",
+        "workflow": ".github/workflows/build-macos.yml",
+        "profile": "apple-macos-x86_64",
+        "architecture": "x86_64",
+        "sdk": "macosx",
+        "rust_target": "x86_64-apple-darwin",
     },
 }
 
@@ -114,6 +124,7 @@ def digest(
         ("deployment_target", deployment_target),
         ("rust_toolchain", rust_toolchain),
         ("conan_profile", specification["profile"]),
+        ("architecture", specification["architecture"]),
         ("sdk", specification["sdk"]),
         ("rust_target", specification["rust_target"]),
         ("trusttunnel_gitlink", trusttunnel_gitlink(root)),

@@ -62,9 +62,29 @@ class AppleStaticBuildContractTests(unittest.TestCase):
     def test_conan_graph_uses_platform_lock(self) -> None:
         self.assertIn('apple-ios-arm64.lock', self.source)
         self.assertIn('apple-macos-arm64.lock', self.source)
+        self.assertEqual(
+            self.source.count('readonly conan_lockfile="$root/scripts/pins/conan/apple-macos-arm64.lock"'),
+            2,
+        )
         self.assertIn('export DOBBY_CONAN_LOCKFILE="$conan_lockfile"', self.source)
         self.assertIn('DOBBY_CONAN_LOCKFILE is required', self.source)
         self.assertIn('Apple build requires the locked Conan provider', self.source)
+
+    def test_macos_builds_are_separate_thin_archives_with_matching_consumers(self) -> None:
+        for required in (
+            'macos-arm64)',
+            'macos-x86_64)',
+            'readonly architecture=x86_64',
+            'readonly go_arch=amd64',
+            'readonly rust_target=x86_64-apple-darwin',
+            'readonly output_directory="$root/lib/macos/x86_64"',
+            "grep -Fxq 'arch=x86_64' \"$CONAN_HOME/profiles/default\"",
+            'native Intel macOS runner',
+            'GOOS=darwin GOARCH="$go_arch"',
+            '-arch $architecture',
+        ):
+            self.assertIn(required, self.source)
+        self.assertNotIn('conan profile update', self.source)
 
     def test_conan_archives_are_filtered_by_apple_platform(self) -> None:
         self.assertIn('conan_archive_matches_target_platform "$library"', self.source)
@@ -105,6 +125,7 @@ class AppleStaticBuildContractTests(unittest.TestCase):
         self.assertIn('strip -S -D "$merged"', self.source)
         self.assertIn("--canonicalize-metadata", self.source)
         self.assertNotIn('libtool -static -o "$merged"', self.source)
+        self.assertIn('scripts/verify_apple_archive.py', self.source)
 
 
 if __name__ == "__main__":

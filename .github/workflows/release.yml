@@ -92,13 +92,20 @@ jobs:
           provenance=lib/static-libraries.provenance.json
           jq -e '
             keys == ["artifacts", "schema", "source_sha"] and
-            .schema == 2 and
+            .schema == 3 and
             (.source_sha | type == "string" and test("^[0-9a-f]{40}$")) and
-            (.artifacts | keys == ["android", "android_x86_64", "ios", "ios_simulator", "macos"]) and
-            all(.artifacts[];
+            (.artifacts | keys == ["android", "android_x86_64", "ios", "ios_simulator", "macos", "macos_arm64", "macos_x86_64"]) and
+            all([.artifacts.android, .artifacts.android_x86_64, .artifacts.ios, .artifacts.ios_simulator, .artifacts.macos_arm64, .artifacts.macos_x86_64][];
               (keys == ["run_id", "sha256"]) and
               (.run_id | type == "string" and test("^[1-9][0-9]*$")) and
-              (.sha256 | type == "string" and test("^[0-9a-f]{64}$")))
+              (.sha256 | type == "string" and test("^[0-9a-f]{64}$"))) and
+            (.artifacts.macos |
+              keys == ["architectures", "run_id", "sha256"] and
+              .architectures == ["arm64", "x86_64"] and
+              (.run_id | type == "string" and test("^[1-9][0-9]*$")) and
+              (.sha256 | type == "string" and test("^[0-9a-f]{64}$"))) and
+            (.artifacts.macos.run_id == .artifacts.macos_arm64.run_id) and
+            (.artifacts.macos.run_id == .artifacts.macos_x86_64.run_id)
           ' "$provenance"
           static_source_sha="$(jq -r .source_sha "$provenance")"
           test "$(git rev-parse "$SOURCE_SHA^")" = "$static_source_sha"
@@ -216,8 +223,26 @@ jobs:
       - name: Download exact macOS static artifact
         uses: actions/download-artifact@v7
         with:
-          name: libdobby_bridge-macos-arm64-static
+          name: libdobby_bridge-macos-universal-static
           path: release-input/macos-static
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.macos_run_id }}
+
+      - name: Download exact macOS arm64 static artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: libdobby_bridge-macos-arm64-static
+          path: release-input/macos-arm64-static
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.macos_run_id }}
+
+      - name: Download exact macOS x86_64 static artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: libdobby_bridge-macos-x86_64-static
+          path: release-input/macos-x86_64-static
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
           run-id: ${{ inputs.macos_run_id }}
@@ -231,6 +256,10 @@ jobs:
           cmp release-input/ios/libdobby_bridge.a lib/ios/libdobby_bridge.a
           cmp release-input/ios-simulator/libdobby_bridge.a lib/ios-simulator/libdobby_bridge.a
           cmp release-input/macos-static/libdobby_bridge.a lib/macos/libdobby_bridge.a
+          test "$(find release-input/macos-arm64-static -mindepth 1 -printf '%P\n' | LC_ALL=C sort)" = "libdobby_bridge.a"
+          test "$(find release-input/macos-x86_64-static -mindepth 1 -printf '%P\n' | LC_ALL=C sort)" = "libdobby_bridge.a"
+          test "$(sha256sum release-input/macos-arm64-static/libdobby_bridge.a | awk '{print $1}')" = "$(jq -r .artifacts.macos_arm64.sha256 lib/static-libraries.provenance.json)"
+          test "$(sha256sum release-input/macos-x86_64-static/libdobby_bridge.a | awk '{print $1}')" = "$(jq -r .artifacts.macos_x86_64.sha256 lib/static-libraries.provenance.json)"
           python3 scripts/package_release_assets.py package \
             --source-sha "$SOURCE_SHA" \
             --run "android=$ANDROID_RUN_ID" \
@@ -403,7 +432,7 @@ jobs:
             release/libdobby_bridge-ios-arm64.zip \
             release/libdobby_bridge-ios-simulator.zip \
             release/libdobby_bridge-macos-arm64.zip \
-            release/libdobby_bridge-macos-arm64-static.zip \
+            release/libdobby_bridge-macos-universal-static.zip \
             release/release-assets.manifest.json
           mkdir published
           gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir published --pattern '*'

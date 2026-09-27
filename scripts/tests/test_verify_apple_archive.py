@@ -106,6 +106,17 @@ class AppleArchiveVerificationTests(unittest.TestCase):
         records = MODULE.parse_otool(metadata(7, "15.6"))
         MODULE.verify(records, "ios-simulator", "15.6")
 
+    def test_accepts_intel_macos_archive_metadata_and_architecture(self) -> None:
+        records = MODULE.parse_otool(metadata(1, "12.0"), "x86_64")
+        MODULE.verify(records, "macos", "12.0")
+        MODULE.verify_architecture(["x86_64"], "x86_64")
+
+    def test_rejects_an_archive_with_the_wrong_or_multiple_architectures(self) -> None:
+        for architectures in (["arm64"], ["arm64", "x86_64"], []):
+            with self.subTest(architectures=architectures):
+                with self.assertRaisesRegex(MODULE.VerificationError, "architecture mismatch"):
+                    MODULE.verify_architecture(architectures, "x86_64")
+
     def test_rejects_member_above_limit(self) -> None:
         records = MODULE.parse_otool(metadata(2, "18.5"))
         with self.assertRaisesRegex(MODULE.VerificationError, "above supported"):

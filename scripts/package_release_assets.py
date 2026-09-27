@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Build and verify deterministic public go-go-tunnel release assets.
 
-The script intentionally packages only the seven files produced by the named
-platform workflows.  It does not build native code and accepts neither local
-configuration nor credentials.
+The script intentionally packages only the nine release assets produced by
+the named platform workflows. It does not build native code and accepts
+neither local configuration nor credentials.
 """
 
 from __future__ import annotations
@@ -79,7 +79,7 @@ ASSETS = (
         (("libdobby_bridge.dylib", "libdobby_bridge.dylib"),),
     ),
     ReleaseAsset(
-        "libdobby_bridge-macos-arm64-static.zip",
+        "libdobby_bridge-macos-universal-static.zip",
         "macos-static",
         (("libdobby_bridge.a", "libdobby_bridge.a"),),
     ),
@@ -173,7 +173,7 @@ def package_assets(source_sha: str, runs: dict[str, str], input_root: Path, outp
         manifest_assets.append(
             {"name": asset.name, "sha256": sha256_file(output), "size": output.stat().st_size, "members": members}
         )
-    document = {"assets": manifest_assets, "runs": runs, "schema": 1, "source_sha": source_sha}
+    document = {"assets": manifest_assets, "runs": runs, "schema": 2, "source_sha": source_sha}
     manifest = output_directory / MANIFEST_NAME
     manifest.write_bytes(canonical_json(document))
     return manifest
@@ -192,7 +192,7 @@ def verify_assets(source_sha: str, asset_directory: Path, manifest: Path) -> Non
     expected_assets = [asset.name for asset in ASSETS]
     if (
         not isinstance(document, dict)
-        or document.get("schema") != 1
+        or document.get("schema") != 2
         or document.get("source_sha") != source_sha
         or not isinstance(document.get("assets"), list)
         or len(document["assets"]) != len(expected_assets)

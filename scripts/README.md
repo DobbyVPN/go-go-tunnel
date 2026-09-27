@@ -9,7 +9,8 @@ The supported build contract is:
 - Rust 1.85.0 for the Apple Rust targets;
 - iOS device arm64 and Simulator arm64/x86_64 with a maximum deployment target
   of 15.6;
-- macOS arm64 with a maximum deployment target of 12.0.
+- macOS arm64 and x86_64 with a maximum deployment target of 12.0; the hosted
+  workflow combines the verified slices into one universal archive.
 
 All Go builds use Go 1.26.8 with `GOTOOLCHAIN=local`; the build fails closed
 when another Go toolchain is selected instead of downloading or switching
@@ -29,10 +30,17 @@ lock, then run `scripts/build_apple_static.sh ios-simulator-arm64` and
 `scripts/build_apple_static.sh ios-simulator-amd64`. The hosted workflow
 combines these verified slices into the universal archive used by gomobile.
 
-Use another new cache and replace `ios` with `macos` for the macOS archive.
-Replace the lock path with `scripts/pins/conan/apple-macos-arm64.lock` for
-macOS. Locked mode requires that exact existing absolute lock path and writes a
-provider which refuses every Conan install without it. Non-Apple workflows use
+For macOS, use a new cache per architecture and select its matching lock. The
+Intel slice runs on a native Intel macOS runner so Conan detects the target
+architecture directly:
+`scripts/pins/conan/apple-macos-arm64.lock` with
+`scripts/build_apple_static.sh macos-arm64`, or
+the same graph lock with `scripts/build_apple_static.sh macos-x86_64`. Each
+invocation writes its thin archive under `lib/macos/<architecture>/`; the
+hosted workflow combines and verifies them as `lib/macos/libdobby_bridge.a`.
+Locked mode requires that
+exact existing absolute lock path and writes a provider which refuses every
+Conan install without it. Non-Apple workflows use
 `--mode unlocked` until their platform graph locks exist; that mode rejects a
 `DOBBY_CONAN_LOCKFILE` environment rather than silently using an accidental
 lock.
@@ -132,8 +140,8 @@ Remove the exception when the pinned Conan implementation fully supports MSVC
 The `Update Static Libraries` workflow accepts one full source SHA and explicit
 successful Android, iOS, and macOS run IDs. It verifies that every run belongs
 to the named workflow at that exact SHA, stages the Android arm64 and x86_64,
-iOS device and universal Simulator, and macOS artifacts fail-closed, records
-their public SHA-256 values and run IDs in
+iOS device and universal Simulator, and macOS arm64, x86_64, and universal
+archives fail-closed, records their public SHA-256 values and run IDs in
 `lib/static-libraries.provenance.json`, and refuses to push if the target branch
 has moved. After its binary-only commit, run the platform workflows again at
 the resulting exact head before tagging a module release.
@@ -145,8 +153,9 @@ one full source SHA, and the five successful Android, iOS, Linux, macOS, and
 Windows workflow run IDs. It refuses a moved `main`, a mismatched run SHA or
 workflow name, an existing tag or release, and any unexpected artifact member.
 
-It downloads exactly the nine platform artifacts, creates deterministic ZIP
-files (fixed timestamp, mode, compression, and member order), and publishes a
+It downloads eleven workflow artifacts, including both macOS thin slices and
+their universal archive, creates nine deterministic ZIP files (fixed
+timestamp, mode, compression, and member order), and publishes a
 `release-assets.manifest.json` with the source SHA, run IDs, member digests,
 and archive digests. The release gate also proves that the checked-in static
 libraries came from successful exact-parent update runs and are byte-identical
