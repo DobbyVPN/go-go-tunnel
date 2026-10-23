@@ -262,7 +262,11 @@ void dobby_vpn_stop() {
         // Submit cleanup task
         ag::event_loop::submit(m_ev_loop.get(), [&stop_promise]() {
             if (m_vpn) {
-                // Let the destructor handle all the safe async teardown!
+                // The client destructor stops its own loop; disconnect first
+                // to stop and close the VPN core and its SOCKS listener.
+                if (m_vpn->client) {
+                    m_vpn->client->disconnect();
+                }
                 delete m_vpn;
                 m_vpn = nullptr;
             }
